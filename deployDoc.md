@@ -5,6 +5,7 @@ This guide covers how to build and deploy your Expo app to the Apple App Store a
 ## Prerequisites
 
 ### Required Accounts
+
 1. **Apple Developer Account** - $99/year
    - Sign up at: https://developer.apple.com
    - Required for App Store distribution
@@ -48,10 +49,12 @@ This will create an `eas.json` file with default build profiles.
 ## Step 4: Update App Configuration
 
 Your `app.json` is already configured with:
+
 - **iOS Bundle Identifier**: Update to your actual bundle ID
 - **Android Package Name**: Update to your actual package name
 
 Make sure to update these in `app.json`:
+
 ```json
 {
   "expo": {
@@ -68,16 +71,19 @@ Make sure to update these in `app.json`:
 ## Step 5: Build Your App
 
 ### Build for iOS (App Store)
+
 ```bash
 eas build --platform ios --profile production
 ```
 
 ### Build for Android (Play Store)
+
 ```bash
 eas build --platform android --profile production
 ```
 
 ### Build for Both Platforms
+
 ```bash
 eas build --platform all --profile production
 ```
@@ -87,6 +93,7 @@ eas build --platform all --profile production
 ## Step 6: Download Build Artifacts
 
 After the build completes:
+
 - **iOS**: Downloads `.ipa` file
 - **Android**: Downloads `.aab` (Android App Bundle) file
 
@@ -101,6 +108,7 @@ eas submit --platform ios
 ```
 
 You'll need:
+
 - Apple ID credentials
 - App-specific password (or App Store Connect API key)
 - App Store Connect app created (https://appstoreconnect.apple.com)
@@ -112,6 +120,7 @@ eas submit --platform android
 ```
 
 You'll need:
+
 - Google Service Account JSON key
 - App created in Google Play Console
 
@@ -137,6 +146,7 @@ You'll need:
    - Notes for reviewer
 
 ### Review Process:
+
 - Takes 1-3 days typically
 - Check status in App Store Connect
 - Respond to any rejection feedback
@@ -167,6 +177,7 @@ You'll need:
    - Follow EAS prompts to create
 
 ### Review Process:
+
 - Usually approved within hours
 - Can take up to a few days
 - Check status in Play Console
@@ -200,17 +211,21 @@ Common build profiles:
 ### Internal Testing (Before Store Release)
 
 **iOS - TestFlight:**
+
 ```bash
 eas build --platform ios --profile preview
 eas submit --platform ios
 ```
+
 - Invite testers via App Store Connect
 - No review required for internal testing
 
 **Android - Internal Testing:**
+
 ```bash
 eas build --platform android --profile preview
 ```
+
 - Upload to Play Console internal testing track
 - Share with test users
 
@@ -219,6 +234,7 @@ eas build --platform android --profile preview
 When releasing updates:
 
 1. Update version in `app.json`:
+
 ```json
 {
   "expo": {
@@ -234,6 +250,7 @@ When releasing updates:
 ```
 
 2. Rebuild and resubmit:
+
 ```bash
 eas build --platform all --profile production
 eas submit --platform all
@@ -252,16 +269,19 @@ eas update --branch production --message "Fixed minor bugs"
 ## Troubleshooting
 
 ### Build Fails
+
 - Check error logs in EAS dashboard
 - Ensure all dependencies are compatible
 - Verify app.json configuration
 
 ### Submission Fails
+
 - Verify credentials are correct
 - Check bundle ID matches App Store Connect/Play Console
 - Ensure all required metadata is filled
 
 ### App Rejected
+
 - Read rejection reason carefully
 - Fix issues and resubmit
 - Common issues: missing privacy policy, unclear permissions
@@ -302,3 +322,15 @@ eas build --profile development --platform ios
 ---
 
 **Ready to deploy?** Start with Step 1 and work through each step. Good luck! 🚀
+
+## Open Xcode command
+
+```
+open ios/activitymobile.xcworkspace
+```
+
+## Open Android Studio command
+
+```
+open -a "Android Studio" android
+```
