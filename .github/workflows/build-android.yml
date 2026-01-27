@@ -29,6 +29,8 @@ jobs:
   build:
     name: Build Android App
     runs-on: ubuntu-latest
+    container:
+      image: reactnativecommunity/react-native-android:latest
     steps:
       - name: 🏗 Setup repo
         uses: actions/checkout@v4
@@ -51,6 +53,17 @@ jobs:
       - name: 🔧 Setup Expo
         run: npx expo prebuild --platform android --clean
 
+      - name: ⚡ Setup Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            android/.gradle
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: 🔑 Decode Keystore
         if: ${{ inputs.build_type == 'release' }}
         run: |
@@ -59,17 +72,20 @@ jobs:
       - name: 🚀 Build Android Release
         if: ${{ inputs.build_type == 'release' }}
         working-directory: android
-        run: ./gradlew assembleRelease bundleRelease
+        run: ./gradlew assembleRelease bundleRelease --parallel --build-cache --configuration-cache
         env:
           KEYSTORE_FILE: release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2
 
       - name: 🚀 Build Android Debug
         if: ${{ inputs.build_type == 'debug' }}
         working-directory: android
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug --parallel --build-cache --configuration-cache
+        env:
+          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2
 
       - name: 📦 Upload APK Artifact
         uses: actions/upload-artifact@v4
