@@ -29,8 +29,6 @@ jobs:
   build:
     name: Build Android App
     runs-on: ubuntu-latest
-    container:
-      image: reactnativecommunity/react-native-android:latest
     steps:
       - name: 🏗 Setup repo
         uses: actions/checkout@v4
@@ -51,7 +49,7 @@ jobs:
         run: npm ci
 
       - name: 🔧 Setup Expo
-        run: npx expo prebuild --platform android --clean
+        run: npx expo prebuild --platform android
 
       - name: ⚡ Setup Gradle cache
         uses: actions/cache@v4
