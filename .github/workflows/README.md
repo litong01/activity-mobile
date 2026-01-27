@@ -79,36 +79,29 @@ android {
 
 ---
 
-## iOS Build (EAS)
+## iOS Build (Native - No EAS)
 
-The iOS workflow uses EAS (Expo Application Services) because iOS builds require macOS and Xcode.
+The iOS workflow builds natively using Xcode on GitHub's macOS runners.
 
-### Setup Required Secrets
+### No Secrets Required
 
-1. **EXPO_TOKEN**
-   - Create at: https://expo.dev/accounts/[account]/settings/access-tokens
-   - Add to GitHub Secrets
-
-### Optional: For App Store Submission
-
-2. **EXPO_APPLE_ID** - Your Apple ID email
-3. **EXPO_APPLE_APP_SPECIFIC_PASSWORD**
-   - Generate at: https://appleid.apple.com/account/manage
-   - App-Specific Passwords section
+This workflow builds **unsigned** apps for verification purposes only. No certificates or provisioning profiles needed.
 
 ### How to Use iOS Build
 
 1. Go to Actions → "Build iOS" → "Run workflow"
 2. Choose options:
-   - **Submit to App Store**: Check if ready to publish
-   - **Build profile**: production, preview, or development
+   - **Build configuration**: `Debug` or `Release` (unsigned)
+   - **Create GitHub Release**: Check to attach artifacts
 3. Click "Run workflow"
 
 ### Output
 
-- Build runs on EAS servers
-- Monitor at: https://expo.dev
-- Download IPA from Expo dashboard
+- **Debug**: `ios/build/app/*.app` - Unsigned app bundle
+- **Release**: `ios/activitymobile.ipa` - Unsigned IPA (cannot be installed on devices)
+- Artifacts attached to GitHub Release (if enabled)
+
+**Note**: These builds are **unsigned** and for build verification only. To install on devices or submit to App Store, you'll need proper code signing (requires Apple Developer account and certificates).
 
 ---
 
@@ -116,16 +109,19 @@ The iOS workflow uses EAS (Expo Application Services) because iOS builds require
 
 ### Android (Native Build)
 
-- ✅ **FREE** - Runs on GitHub's free runners
+- ✅ **FREE** - Runs on GitHub's free runners (Linux)
 - ✅ No external services needed
 - ✅ Full control over build
+- ✅ Creates signed APK/AAB (with keystore)
 
-### iOS (EAS Build)
+### iOS (Native Build)
 
-- 💰 **Requires EAS account**
-- Free tier: Limited builds/month
-- Paid plans: https://expo.dev/pricing
-- Alternative: Use macOS runner (GitHub paid feature)
+- ⚠️ Uses GitHub's **macOS runners**
+- Free tier: 2,000 minutes/month
+- ~15-30 min per build = ~66-133 builds/month free
+- After free tier: $0.08/minute
+- ❌ Unsigned builds (for verification only)
+- ℹ️ For App Store: Need certificates/profiles or use EAS
 
 ---
 
