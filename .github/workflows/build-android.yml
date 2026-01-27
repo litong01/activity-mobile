@@ -87,11 +87,20 @@ jobs:
         env:
           GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2
 
+      - name: � Rename build artifacts
+        run: |
+          if [ "${{ inputs.build_type }}" == "release" ]; then
+            mv android/app/build/outputs/apk/release/app-release.apk android/app/build/outputs/apk/release/activitymobile.apk
+            mv android/app/build/outputs/bundle/release/app-release.aab android/app/build/outputs/bundle/release/activitymobile.aab
+          else
+            mv android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/activitymobile.apk
+          fi
+
       - name: 📦 Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-${{ inputs.build_type }}-apk
-          path: android/app/build/outputs/apk/${{ inputs.build_type }}/*.apk
+          path: android/app/build/outputs/apk/${{ inputs.build_type }}/activitymobile.apk
           retention-days: 30
 
       - name: 📦 Upload AAB Artifact
@@ -99,7 +108,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-release-aab
-          path: android/app/build/outputs/bundle/release/*.aab
+          path: android/app/build/outputs/bundle/release/activitymobile.aab
           retention-days: 30
 
       - name: 🏷️ Get version from package.json
@@ -118,8 +127,8 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            android/app/build/outputs/apk/${{ inputs.build_type }}/*.apk
-            android/app/build/outputs/bundle/release/*.aab
+            android/app/build/outputs/apk/${{ inputs.build_type }}/activitymobile.apk
+            android/app/build/outputs/bundle/release/activitymobile.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -129,6 +138,6 @@ jobs:
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           packageName: com.yourcompany.activitymobile
-          releaseFiles: android/app/build/outputs/bundle/release/*.aab
+          releaseFiles: android/app/build/outputs/bundle/release/activitymobile.aab
           track: internal
           status: completed
