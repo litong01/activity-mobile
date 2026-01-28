@@ -2,9 +2,19 @@ import ActivityDetailBottomSheet from "@/components/ActivityDetailBottomSheet";
 import ActivityItem from "@/components/ActivityItem";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
+import { apiService } from "@/services/api.service";
 import { Activity } from "@/types/Activity";
-import React, { useMemo, useState } from "react";
-import { FlatList, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 // Mock data - this will be replaced with API calls
 const INITIAL_ACTIVITIES: Activity[] = [
@@ -117,10 +127,54 @@ export default function TabOneScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
   const [searchQuery, setSearchQuery] = useState("");
-  const [activities, setActivities] = useState<Activity[]>(INITIAL_ACTIVITIES);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
     null,
   );
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Load activities on mount
+  useEffect(() => {
+    loadActivities();
+  }, []);
+
+  /**
+   * Load activities from API
+   */
+  const loadActivities = async () => {
+    try {
+      setIsLoading(true);
+      const data = await apiService.getActivities();
+      setActivities(data);
+    } catch (error) {
+      console.error("Failed to load activities:", error);
+      Alert.alert(
+        "Error",
+        "Failed to load activities. Please check your backend server is running.",
+        [{ text: "OK" }],
+      );
+      // Fallback to mock data if API fails
+      setActivities(INITIAL_ACTIVITIES);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Refresh activities (pull to refresh)
+   */
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      const data = await apiService.getActivities();
+      setActivities(data);
+    } catch (error) {
+      console.error("Failed to refresh activities:", error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // Filter activities based on search query
   const filteredActivities = useMemo(() => {
@@ -147,90 +201,103 @@ export default function TabOneScreen() {
     setSelectedActivity(null);
   };
 
-  const handleJoin = (activityId: string) => {
-    setActivities((prev) =>
-      prev.map((activity) =>
-        activity.id === activityId
-          ? {
-              ...activity,
-              isParticipant: true,
-              participantCount: (activity.participantCount || 0) + 1,
-            }
-          : activity,
-      ),
-    );
-    // Update selected activity as well
-    if (selectedActivity?.id === activityId) {
-      setSelectedActivity((prev) =>
-        prev
-          ? {
-              ...prev,
-              isParticipant: true,
-              participantCount: (prev.participantCount || 0) + 1,
-            }
-          : null,
+  const handleJoin = async (activityId: string) => {
+    try {
+      await apiService.joinActivity(activityId);
+
+      setActivities((prev) =>
+        prev.map((activity) =>
+          activity.id === activityId
+            ? {
+                ...activity,
+                isParticipant: true,
+                participantCount: (activity.participantCount || 0) + 1,
+              }
+            : activity,
+        ),
       );
+      // Update selected activity as well
+      if (selectedActivity?.id === activityId) {
+        setSelectedActivity((prev) =>
+          prev
+            ? {
+                ...prev,
+                isParticipant: true,
+                participantCount: (prev.participantCount || 0) + 1,
+              }
+            : null,
+        );
+      }
+    } catch (error) {
+      console.error("Failed to join activity:", error);
+      Alert.alert("Error", "Failed to join activity. Please try again.");
     }
   };
 
-  const handleLeave = (activityId: string) => {
-    setActivities((prev) =>
-      prev.map((activity) =>
-        activity.id === activityId
-          ? {
-              ...activity,
-              isParticipant: false,
-              participantCount: Math.max(
-                (activity.participantCount || 1) - 1,
-                0,
-              ),
-            }
-          : activity,
-      ),
-    );
-    // Update selected activity as well
-    if (selectedActivity?.id === activityId) {
-      setSelectedActivity((prev) =>
-        prev
-          ? {
-              ...prev,
-              isParticipant: false,
-              participantCount: Math.max((prev.participantCount || 1) - 1, 0),
-            }
-          : null,
+  const handleLeave = async (activityId: string) => {
+    try {
+      await apiService.leaveActivity(activityId);
+
+      setActivities((prev) =>
+        prev.map((activity) =>
+          activity.id === activityId
+            ? {
+                ...activity,
+                isParticipant: false,
+                participantCount: Math.max(
+                  (activity.participantCount || 1) - 1,
+                  0,
+                ),
+              }
+            : activity,
+        ),
       );
+      // Update selected activity as well
+      if (selectedActivity?.id === activityId) {
+        setSelectedActivity((prev) =>
+          prev
+            ? {
+                ...prev,
+                isParticipant: false,
+                participantCount: Math.max((prev.participantCount || 1) - 1, 0),
+              }
+            : null,
+        );
+      }
+    } catch (error) {
+      console.error("Failed to leave activity:", error);
+      Alert.alert("Error", "Failed to leave activity. Please try again.");
     }
   };
 
-  const handleAddComment = (activityId: string, commentText: string) => {
-    const newComment = {
-      id: `c${Date.now()}`,
-      userId: "current-user",
-      userName: "You",
-      text: commentText,
-      timestamp: "Just now",
-    };
+  const handleAddComment = async (activityId: string, commentText: string) => {
+    try {
+      const newComment = await apiService.addComment(activityId, commentText);
 
-    setActivities((prev) =>
-      prev.map((activity) =>
-        activity.id === activityId
-          ? {
-              ...activity,
-              comments: [...(activity.comments || []), newComment],
-            }
-          : activity,
-      ),
-    );
-    // Update selected activity as well
-    if (selectedActivity?.id === activityId) {
-      setSelectedActivity((prev) =>
-        prev
-          ? {
-              ...prev,
-              comments: [...(prev.comments || []), newComment],
-            }
-          : null,
+      setActivities((prev) =>
+        prev.map((activity) =>
+          activity.id === activityId
+            ? {
+                ...activity,
+                comments: [...(activity.comments || []), newComment],
+              }
+            : activity,
+        ),
       );
+      // Update selected activity as well
+      if (selectedActivity?.id === activityId) {
+        setSelectedActivity((prev) =>
+          prev
+            ? {
+                ...prev,
+                comments: [...(prev.comments || []), newComment],
+              }
+            : null,
+        );
+      }
+    } catch (error) {
+      console.error("Failed to add comment:", error);
+      Alert.alert("Error", "Failed to add comment. Please try again.");
     }
   };
 
@@ -258,16 +325,29 @@ export default function TabOneScreen() {
     </View>
   );
 
-  const renderEmptyComponent = () => (
-    <View style={styles.emptyContainer}>
-      <Text style={[styles.emptyText, { color: colors.text }]}>
-        No activities found
-      </Text>
-      <Text style={[styles.emptySubtext, { color: colors.text }]}>
-        Try adjusting your search
-      </Text>
-    </View>
-  );
+  const renderEmptyComponent = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.tint} />
+          <Text style={[styles.loadingText, { color: colors.text }]}>
+            Loading activities...
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={[styles.emptyText, { color: colors.text }]}>
+          No activities found
+        </Text>
+        <Text style={[styles.emptySubtext, { color: colors.text }]}>
+          Try adjusting your search
+        </Text>
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -281,6 +361,14 @@ export default function TabOneScreen() {
           filteredActivities.length === 0 ? styles.emptyList : undefined
         }
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.tint}
+            colors={[colors.tint]}
+          />
+        }
       />
       <ActivityDetailBottomSheet
         activity={selectedActivity}
@@ -324,5 +412,15 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 14,
     opacity: 0.6,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+  },
+  loadingText: {
+    fontSize: 16,
+    marginTop: 16,
   },
 });
