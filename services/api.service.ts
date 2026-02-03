@@ -102,6 +102,23 @@ class ApiService {
     });
   }
 
+  async createActivity(data: {
+    title: string;
+    description: string;
+    activityType: string;
+    time: string;
+    location: string;
+  }): Promise<Activity> {
+    const response = await this.fetch<ApiResponse<Activity>>(`/activities`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    if (!response.data) {
+      throw new Error("Failed to create activity");
+    }
+    return response.data;
+  }
+
   /**
    * Comments API
    */

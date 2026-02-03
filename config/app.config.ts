@@ -18,7 +18,7 @@ export const AppConfig = {
   // Your backend API configuration
   api: {
     baseUrl: __DEV__
-      ? "http://localhost:3000/api" // Your local backend
+      ? "http://localhost:8090" // Your local backend
       : "https://your-production-api.com/api", // Your production backend
     timeout: 10000,
   },

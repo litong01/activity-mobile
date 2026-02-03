@@ -12,6 +12,7 @@ export interface Activity {
   description: string;
   time: string;
   location: string;
+  organizerId?: string;
   organizerName: string;
   activityType: "sports" | "music" | "food" | "social" | "outdoor" | "learning";
   imageUrl?: string;

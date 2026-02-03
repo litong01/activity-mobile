@@ -115,7 +115,7 @@ export default function ActivityDetailBottomSheet({
           {/* Activity Type Badge */}
           <View style={[styles.badge, { backgroundColor: colors.tint }]}>
             <Text style={styles.badgeText}>
-              {activity.activityType.toUpperCase()}
+              {activity.activityType?.toUpperCase() || "ACTIVITY"}
             </Text>
           </View>
 

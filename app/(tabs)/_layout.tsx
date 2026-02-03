@@ -1,7 +1,7 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { Link, Tabs } from "expo-router";
+import { Link, Tabs, useRouter } from "expo-router";
 import React from "react";
-import { Pressable } from "react-native";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
 
 import { useClientOnlyValue } from "@/components/useClientOnlyValue";
 import { useColorScheme } from "@/components/useColorScheme";
@@ -14,6 +14,63 @@ function TabBarIcon(props: {
 }) {
   return <FontAwesome size={28} style={{ marginBottom: -3 }} {...props} />;
 }
+
+function CreateActivityFAB(
+  props: React.ComponentProps<typeof View> & Record<string, unknown>
+) {
+  const { style, ...rest } = props;
+  const router = useRouter();
+  const colorScheme = useColorScheme();
+  const tint = Colors[colorScheme ?? "light"].tint;
+
+  return (
+    <View style={[styles.fabWrapper, style]} {...rest}>
+      <Pressable
+        onPress={() => router.push("/two?openCreate=1")}
+        style={({ pressed }) => [
+          styles.fab,
+          { backgroundColor: tint },
+          pressed && styles.fabPressed,
+        ]}
+        accessibilityLabel="Create new activity"
+        accessibilityRole="button"
+      >
+        <FontAwesome name="plus" size={26} color="#fff" />
+      </Pressable>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  fabWrapper: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: Platform.OS === "ios" ? -8 : 0,
+  },
+  fab: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  fabPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.96 }],
+  },
+});
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -53,6 +110,15 @@ export default function TabLayout() {
         options={{
           title: "My Activity",
           tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="create"
+        options={{
+          title: "New Activity",
+          tabBarLabel: () => null,
+          tabBarIcon: () => null,
+          tabBarButton: (props) => <CreateActivityFAB {...props} />,
         }}
       />
       <Tabs.Screen
