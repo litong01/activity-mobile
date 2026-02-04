@@ -103,11 +103,15 @@ class ApiService {
   }
 
   async createActivity(data: {
-    title: string;
-    description: string;
-    activityType: string;
-    time: string;
-    location: string;
+    name: string;
+    type: string;
+    location?: string;
+    startTime: string;
+    endTime?: string;
+    maxParticipants?: number;
+    state?: string;
+    organizerId: string;
+    requiresApproval?: boolean;
   }): Promise<Activity> {
     const response = await this.fetch<ApiResponse<Activity>>(`/activities`, {
       method: "POST",

@@ -1,9 +1,13 @@
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
-import { Activity } from "@/types/Activity";
+import {
+    Activity,
+    formatActivityTime,
+    getActivityOrganizerName,
+} from "@/types/Activity";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import React from "react";
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 interface ActivityItemProps {
   activity: Activity;
@@ -11,15 +15,18 @@ interface ActivityItemProps {
 }
 
 const activityIcons: Record<
-  Activity["activityType"],
+  string,
   React.ComponentProps<typeof FontAwesome>["name"]
 > = {
+  tennis: "futbol-o",
+  basketball: "futbol-o",
   sports: "futbol-o",
   music: "music",
   food: "cutlery",
   social: "users",
   outdoor: "tree",
   learning: "book",
+  default: "calendar",
 };
 
 export default function ActivityItem({ activity, onPress }: ActivityItemProps) {
@@ -36,55 +43,53 @@ export default function ActivityItem({ activity, onPress }: ActivityItemProps) {
       activeOpacity={0.7}
     >
       <View style={styles.iconContainer}>
-        {activity.imageUrl ? (
-          <Image source={{ uri: activity.imageUrl }} style={styles.image} />
-        ) : (
-          <View
-            style={[styles.iconPlaceholder, { backgroundColor: colors.tint }]}
-          >
-            <FontAwesome
-              name={activityIcons[activity.activityType]}
-              size={32}
-              color="#fff"
-            />
-          </View>
-        )}
+        <View
+          style={[styles.iconPlaceholder, { backgroundColor: colors.tint }]}
+        >
+          <FontAwesome
+            name={activityIcons[activity.type] || activityIcons.default}
+            size={32}
+            color="#fff"
+          />
+        </View>
       </View>
 
       <View style={styles.contentContainer}>
         <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-          {activity.title}
+          {activity.name}
         </Text>
         <Text
-          style={[styles.description, { color: colors.text }]}
-          numberOfLines={2}
+          style={[styles.typeText, { color: colors.tint }]}
+          numberOfLines={1}
         >
-          {activity.description}
+          {activity.type}
         </Text>
 
         <View style={styles.detailsContainer}>
           <View style={styles.detailRow}>
             <FontAwesome name="clock-o" size={14} color={colors.tint} />
             <Text style={[styles.detailText, { color: colors.text }]}>
-              {activity.time}
+              {formatActivityTime(activity)}
             </Text>
           </View>
 
-          <View style={styles.detailRow}>
-            <FontAwesome name="map-marker" size={14} color={colors.tint} />
-            <Text
-              style={[styles.detailText, { color: colors.text }]}
-              numberOfLines={1}
-            >
-              {activity.location}
-            </Text>
-          </View>
+          {activity.location && (
+            <View style={styles.detailRow}>
+              <FontAwesome name="map-marker" size={14} color={colors.tint} />
+              <Text
+                style={[styles.detailText, { color: colors.text }]}
+                numberOfLines={1}
+              >
+                {activity.location}
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.organizerRow}>
           <FontAwesome name="user" size={14} color={colors.tint} />
           <Text style={[styles.organizerText, { color: colors.text }]}>
-            {activity.organizerName}
+            {getActivityOrganizerName(activity)}
           </Text>
         </View>
       </View>
@@ -130,10 +135,11 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginBottom: 4,
   },
-  description: {
-    fontSize: 14,
+  typeText: {
+    fontSize: 12,
+    fontWeight: "500",
     marginBottom: 8,
-    opacity: 0.8,
+    textTransform: "uppercase",
   },
   detailsContainer: {
     marginBottom: 6,

@@ -3,17 +3,17 @@ import ActivityItem from "@/components/ActivityItem";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { apiService } from "@/services/api.service";
-import { Activity } from "@/types/Activity";
+import { Activity, getActivityOrganizerName } from "@/types/Activity";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 
 // Mock data - this will be replaced with API calls
@@ -185,11 +185,10 @@ export default function TabOneScreen() {
     const query = searchQuery.toLowerCase();
     return activities.filter(
       (activity) =>
-        activity.title.toLowerCase().includes(query) ||
-        activity.description.toLowerCase().includes(query) ||
-        activity.location.toLowerCase().includes(query) ||
-        activity.organizerName.toLowerCase().includes(query) ||
-        activity.activityType.toLowerCase().includes(query),
+        activity.name.toLowerCase().includes(query) ||
+        activity.type.toLowerCase().includes(query) ||
+        activity.location?.toLowerCase().includes(query) ||
+        getActivityOrganizerName(activity).toLowerCase().includes(query),
     );
   }, [searchQuery, activities]);
 

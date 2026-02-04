@@ -5,7 +5,7 @@ import CreateActivityBottomSheet, {
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { apiService } from "@/services/api.service";
-import { Activity } from "@/types/Activity";
+import { Activity, getActivityOrganizerName } from "@/types/Activity";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -103,11 +103,10 @@ export default function TabTwoScreen() {
     const query = searchQuery.toLowerCase();
     return myActivities.filter(
       (activity) =>
-        activity.title.toLowerCase().includes(query) ||
-        activity.description.toLowerCase().includes(query) ||
-        activity.location.toLowerCase().includes(query) ||
-        activity.organizerName.toLowerCase().includes(query) ||
-        activity.activityType.toLowerCase().includes(query),
+        activity.name.toLowerCase().includes(query) ||
+        activity.type.toLowerCase().includes(query) ||
+        activity.location?.toLowerCase().includes(query) ||
+        getActivityOrganizerName(activity).toLowerCase().includes(query),
     );
   }, [searchQuery, myActivities]);
 
@@ -118,6 +117,10 @@ export default function TabTwoScreen() {
   const handleCloseBottomSheet = useCallback(() => {
     setSelectedActivity(undefined);
   }, []);
+
+  const renderItem = ({ item }: { item: Activity }) => (
+    <ActivityItem activity={item} onPress={() => handleActivityPress(item)} />
+  );
 
   const handleCreateActivity = useCallback(async (form: CreateActivityForm) => {
     try {
@@ -134,19 +137,7 @@ export default function TabTwoScreen() {
   const handleJoin = async (activityId: string) => {
     try {
       await apiService.joinActivity(activityId);
-      await loadActivities(); // Refresh the list
-      // Update selected activity as well
-      if (selectedActivity?.id === activityId) {
-        setSelectedActivity((prev) =>
-          prev
-            ? {
-                ...prev,
-                isParticipant: true,
-                participantCount: (prev.participantCount || 0) + 1,
-              }
-            : null,
-        );
-      }
+      await loadActivities(); // Refresh the list to get updated participants
     } catch (error) {
       console.error("Failed to join activity:", error);
       Alert.alert("Error", "Failed to join activity. Please try again.");
@@ -156,19 +147,7 @@ export default function TabTwoScreen() {
   const handleLeave = async (activityId: string) => {
     try {
       await apiService.leaveActivity(activityId);
-      await loadActivities(); // Refresh the list
-      // Update selected activity as well
-      if (selectedActivity?.id === activityId) {
-        setSelectedActivity((prev) =>
-          prev
-            ? {
-                ...prev,
-                isParticipant: false,
-                participantCount: Math.max((prev.participantCount || 1) - 1, 0),
-              }
-            : null,
-        );
-      }
+      await loadActivities(); // Refresh the list to get updated participants
     } catch (error) {
       console.error("Failed to leave activity:", error);
       Alert.alert("Error", "Failed to leave activity. Please try again.");
@@ -178,36 +157,12 @@ export default function TabTwoScreen() {
   const handleAddComment = async (activityId: string, comment: string) => {
     try {
       await apiService.addComment(activityId, comment);
-      await loadActivities(); // Refresh to get new comment
-      // Update selected activity as well
-      if (selectedActivity?.id === activityId) {
-        setSelectedActivity((prev) =>
-          prev
-            ? {
-                ...prev,
-                comments: [
-                  ...(prev.comments || []),
-                  {
-                    id: `temp-${Date.now()}`,
-                    userId: "current-user",
-                    userName: "You",
-                    text: comment,
-                    timestamp: new Date().toISOString(),
-                  },
-                ],
-              }
-            : null,
-        );
-      }
+      await loadActivities(); // Refresh to get new message
     } catch (error) {
       console.error("Failed to add comment:", error);
       Alert.alert("Error", "Failed to add comment. Please try again.");
     }
   };
-
-  const renderItem = ({ item }: { item: Activity }) => (
-    <ActivityItem activity={item} onPress={handleActivityPress} />
-  );
 
   const renderHeader = () => (
     <View style={styles.header}>

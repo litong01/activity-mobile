@@ -1,6 +1,12 @@
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
-import { Activity } from "@/types/Activity";
+import {
+  Activity,
+  formatActivityTime,
+  getActivityOrganizerName,
+  getParticipantCount,
+  isUserParticipant,
+} from "@/types/Activity";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -21,21 +27,27 @@ import {
   View,
 } from "react-native";
 
-const ACTIVITY_TYPES: Activity["activityType"][] = [
+const ACTIVITY_TYPES = [
   "sports",
   "music",
   "food",
   "social",
   "outdoor",
   "learning",
+  "tennis",
+  "basketball",
 ];
 
 export interface CreateActivityForm {
-  title: string;
-  description: string;
-  activityType: Activity["activityType"];
-  time: string;
-  location: string;
+  name: string;
+  type: string;
+  location?: string;
+  startTime: string;
+  endTime?: string;
+  maxParticipants?: number;
+  state?: "active" | "cancelled" | "completed";
+  organizerId: string;
+  requiresApproval?: boolean;
 }
 
 interface CreateActivityBottomSheetProps {
@@ -60,9 +72,7 @@ export default function CreateActivityBottomSheet({
   const bottomSheetRef = useRef<BottomSheet>(null);
 
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [activityType, setActivityType] =
-    useState<Activity["activityType"]>("social");
+  const [activityType, setActivityType] = useState("social");
   const [time, setTime] = useState("");
   const [location, setLocation] = useState("");
   const [commentText, setCommentText] = useState("");
@@ -71,7 +81,6 @@ export default function CreateActivityBottomSheet({
 
   const resetForm = useCallback(() => {
     setTitle("");
-    setDescription("");
     setActivityType("social");
     setTime("");
     setLocation("");
@@ -81,11 +90,10 @@ export default function CreateActivityBottomSheet({
   // Populate form when in edit mode
   useEffect(() => {
     if (activity) {
-      setTitle(activity.title);
-      setDescription(activity.description);
-      setActivityType(activity.activityType);
-      setTime(activity.time);
-      setLocation(activity.location);
+      setTitle(activity.name);
+      setActivityType(activity.type);
+      setTime(activity.startTime);
+      setLocation(activity.location || "");
     } else {
       // Reset form for create mode
       resetForm();
@@ -122,24 +130,16 @@ export default function CreateActivityBottomSheet({
   const handleCreate = useCallback(() => {
     if (!title.trim()) return;
     onCreate({
-      title: title.trim(),
-      description: description.trim(),
-      activityType,
-      time: time.trim(),
+      name: title.trim(),
+      type: activityType,
+      startTime: time.trim() || new Date().toISOString(),
       location: location.trim(),
+      organizerId: "temp-user-id", // TODO: Replace with actual user ID from auth
+      requiresApproval: false,
     });
     resetForm();
     onClose();
-  }, [
-    title,
-    description,
-    activityType,
-    time,
-    location,
-    onCreate,
-    resetForm,
-    onClose,
-  ]);
+  }, [title, activityType, time, location, onCreate, resetForm, onClose]);
 
   const handleJoin = useCallback(() => {
     if (activity && onJoin) {
@@ -186,7 +186,7 @@ export default function CreateActivityBottomSheet({
       >
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text }]}>
-            {isCreateMode ? "Create new activity" : activity?.title}
+            {isCreateMode ? "Create new activity" : activity?.name}
           </Text>
           <TouchableOpacity
             onPress={handleClose}
@@ -217,30 +217,6 @@ export default function CreateActivityBottomSheet({
                 value={title}
                 onChangeText={setTitle}
                 autoCapitalize="words"
-              />
-            </View>
-
-            <View style={styles.section}>
-              <Text style={[styles.label, { color: colors.text }]}>
-                Description
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  styles.textArea,
-                  {
-                    backgroundColor:
-                      colorScheme === "dark" ? "#333" : "#f5f5f5",
-                    color: colors.text,
-                    borderColor: colors.tint,
-                  },
-                ]}
-                placeholder="What's this activity about?"
-                placeholderTextColor={colorScheme === "dark" ? "#999" : "#666"}
-                value={description}
-                onChangeText={setDescription}
-                multiline
-                numberOfLines={3}
               />
             </View>
 
@@ -334,37 +310,28 @@ export default function CreateActivityBottomSheet({
               <View style={styles.detailRow}>
                 <FontAwesome name="clock-o" size={16} color={colors.text} />
                 <Text style={[styles.detailText, { color: colors.text }]}>
-                  {activity?.time}
+                  {activity ? formatActivityTime(activity) : ""}
                 </Text>
               </View>
               <View style={styles.detailRow}>
                 <FontAwesome name="map-marker" size={16} color={colors.text} />
                 <Text style={[styles.detailText, { color: colors.text }]}>
-                  {activity?.location}
+                  {activity?.location || "No location"}
                 </Text>
               </View>
               <View style={styles.detailRow}>
                 <FontAwesome name="user" size={16} color={colors.text} />
                 <Text style={[styles.detailText, { color: colors.text }]}>
-                  {activity?.organizerName}
+                  {activity ? getActivityOrganizerName(activity) : "Unknown"}
                 </Text>
               </View>
               <View style={styles.detailRow}>
                 <FontAwesome name="users" size={16} color={colors.text} />
                 <Text style={[styles.detailText, { color: colors.text }]}>
-                  {activity?.participantCount || 0} /{" "}
+                  {activity ? getParticipantCount(activity) : 0} /{" "}
                   {activity?.maxParticipants || "∞"} participants
                 </Text>
               </View>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Description
-              </Text>
-              <Text style={[styles.description, { color: colors.text }]}>
-                {activity?.description}
-              </Text>
             </View>
 
             <View style={styles.section}>
@@ -381,12 +348,12 @@ export default function CreateActivityBottomSheet({
                 ]}
               >
                 <Text style={[styles.typeChipText, { color: colors.tint }]}>
-                  {activity?.activityType}
+                  {activity?.type?.toUpperCase() || "ACTIVITY"}
                 </Text>
               </View>
             </View>
 
-            {activity?.isParticipant ? (
+            {activity && isUserParticipant(activity, undefined) ? (
               <TouchableOpacity
                 style={[styles.actionButton, { backgroundColor: "#ff6b6b" }]}
                 onPress={handleLeave}
@@ -406,24 +373,24 @@ export default function CreateActivityBottomSheet({
 
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Comments
+                Messages
               </Text>
-              {activity?.comments && activity.comments.length > 0 ? (
-                activity.comments.map((comment) => (
-                  <View key={comment.id} style={styles.comment}>
+              {activity?.messages && activity.messages.length > 0 ? (
+                activity.messages.map((message) => (
+                  <View key={message.id} style={styles.comment}>
                     <Text
                       style={[styles.commentAuthor, { color: colors.text }]}
                     >
-                      {comment.userName}
+                      {message.user?.name || "Anonymous"}
                     </Text>
                     <Text style={[styles.commentText, { color: colors.text }]}>
-                      {comment.text}
+                      {message.content}
                     </Text>
                   </View>
                 ))
               ) : (
                 <Text style={[styles.noComments, { color: colors.text }]}>
-                  No comments yet
+                  No messages yet
                 </Text>
               )}
 

@@ -1,6 +1,12 @@
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
-import { Activity } from "@/types/Activity";
+import {
+    Activity,
+    formatActivityTime,
+    getActivityOrganizerName,
+    getParticipantCount,
+    isUserParticipant,
+} from "@/types/Activity";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import BottomSheet, {
     BottomSheetBackdrop,
@@ -80,8 +86,8 @@ export default function ActivityDetailBottomSheet({
   }, [activity]);
 
   const participantText = activity?.maxParticipants
-    ? `${activity.participantCount || 0}/${activity.maxParticipants} participants`
-    : `${activity?.participantCount || 0} participants`;
+    ? `${activity ? getParticipantCount(activity) : 0}/${activity.maxParticipants} participants`
+    : `${activity ? getParticipantCount(activity) : 0} participants`;
 
   return (
     <BottomSheet
@@ -105,7 +111,7 @@ export default function ActivityDetailBottomSheet({
           {/* Header */}
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.text }]}>
-              {activity.title}
+              {activity.name}
             </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <FontAwesome name="times" size={24} color={colors.text} />
@@ -115,14 +121,17 @@ export default function ActivityDetailBottomSheet({
           {/* Activity Type Badge */}
           <View style={[styles.badge, { backgroundColor: colors.tint }]}>
             <Text style={styles.badgeText}>
-              {activity.activityType?.toUpperCase() || "ACTIVITY"}
+              {activity.type?.toUpperCase() || "ACTIVITY"}
             </Text>
           </View>
 
           {/* Details */}
           <View style={styles.section}>
+            <Text style={[styles.sectionLabel, { color: colors.text }]}>
+              Location
+            </Text>
             <Text style={[styles.description, { color: colors.text }]}>
-              {activity.description}
+              {activity.location || "No location specified"}
             </Text>
           </View>
 
@@ -131,19 +140,21 @@ export default function ActivityDetailBottomSheet({
             <View style={styles.infoRow}>
               <FontAwesome name="clock-o" size={20} color={colors.tint} />
               <Text style={[styles.infoText, { color: colors.text }]}>
-                {activity.time}
+                {formatActivityTime(activity)}
               </Text>
             </View>
-            <View style={styles.infoRow}>
-              <FontAwesome name="map-marker" size={20} color={colors.tint} />
-              <Text style={[styles.infoText, { color: colors.text }]}>
-                {activity.location}
-              </Text>
-            </View>
+            {activity.location && (
+              <View style={styles.infoRow}>
+                <FontAwesome name="map-marker" size={20} color={colors.tint} />
+                <Text style={[styles.infoText, { color: colors.text }]}>
+                  {activity.location}
+                </Text>
+              </View>
+            )}
             <View style={styles.infoRow}>
               <FontAwesome name="user" size={20} color={colors.tint} />
               <Text style={[styles.infoText, { color: colors.text }]}>
-                Organized by {activity.organizerName}
+                Organized by {getActivityOrganizerName(activity)}
               </Text>
             </View>
             <View style={styles.infoRow}>
@@ -156,7 +167,7 @@ export default function ActivityDetailBottomSheet({
 
           {/* Action Buttons */}
           <View style={styles.section}>
-            {activity.isParticipant ? (
+            {isUserParticipant(activity, undefined) ? (
               <TouchableOpacity
                 style={[styles.button, styles.leaveButton]}
                 onPress={handleLeave}
@@ -178,11 +189,11 @@ export default function ActivityDetailBottomSheet({
           {/* Comments Section */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Discussion ({activity.comments?.length || 0})
+              Discussion ({activity.messages?.length || 0})
             </Text>
 
             {/* Add Comment (only if participant) */}
-            {activity.isParticipant && (
+            {activity && isUserParticipant(activity, undefined) && (
               <View style={styles.addCommentContainer}>
                 <TextInput
                   style={[
@@ -221,11 +232,11 @@ export default function ActivityDetailBottomSheet({
             )}
 
             {/* Comments List */}
-            {activity.comments && activity.comments.length > 0 ? (
+            {activity.messages && activity.messages.length > 0 ? (
               <View style={styles.commentsList}>
-                {activity.comments.map((comment) => (
+                {activity.messages.map((message) => (
                   <View
-                    key={comment.id}
+                    key={message.id}
                     style={[
                       styles.commentItem,
                       {
@@ -239,23 +250,23 @@ export default function ActivityDetailBottomSheet({
                       <Text
                         style={[styles.commentAuthor, { color: colors.tint }]}
                       >
-                        {comment.userName}
+                        {message.user?.name || "Anonymous"}
                       </Text>
                       <Text
                         style={[styles.commentTime, { color: colors.text }]}
                       >
-                        {comment.timestamp}
+                        {new Date(message.createdAt).toLocaleString()}
                       </Text>
                     </View>
                     <Text style={[styles.commentText, { color: colors.text }]}>
-                      {comment.text}
+                      {message.content}
                     </Text>
                   </View>
                 ))}
               </View>
             ) : (
               <Text style={[styles.noComments, { color: colors.text }]}>
-                {activity.isParticipant
+                {activity && isUserParticipant(activity, undefined)
                   ? "No comments yet. Be the first to comment!"
                   : "Join the activity to see and add comments."}
               </Text>
@@ -301,6 +312,11 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 24,
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 8,
   },
   description: {
     fontSize: 16,

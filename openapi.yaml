@@ -1,0 +1,1392 @@
+openapi: 3.0.0
+info:
+  title: Activity Backend API
+  description: API for managing activities, users, and participants
+  version: 1.0.0
+  contact:
+    name: Activity Backend Team
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server
+
+tags:
+  - name: activities
+    description: Activity management endpoints
+  - name: users
+    description: User management endpoints
+  - name: participants
+    description: Activity participant management endpoints
+  - name: recurrence-rules
+    description: Recurrence rule management endpoints
+  - name: activity-messages
+    description: Activity message management endpoints
+
+paths:
+  /activities:
+    get:
+      tags:
+        - activities
+      summary: Get all activities with optional filters
+      description: Retrieve a paginated list of activities with optional filtering by type, location, time range, organizer, and availability
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: type
+          in: query
+          description: Filter by activity type
+          schema:
+            type: string
+            example: tennis
+        - name: location
+          in: query
+          description: Filter by activity location
+          schema:
+            type: string
+            example: Central Park
+        - name: startTimeFrom
+          in: query
+          description: Filter activities starting from this time (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+            example: "2026-01-28T10:00:00Z"
+        - name: startTimeTo
+          in: query
+          description: Filter activities starting until this time (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+            example: "2026-01-30T18:00:00Z"
+        - name: organizerId
+          in: query
+          description: Filter by organizer user ID
+          schema:
+            type: string
+            example: cm5abc123def456
+        - name: available
+          in: query
+          description: Filter by availability (has space for more participants)
+          schema:
+            type: boolean
+            example: true
+      responses:
+        '200':
+          description: Successful response with paginated activities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Activity'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    post:
+      tags:
+        - activities
+      summary: Create a new activity
+      description: Create a new activity with the provided details
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateActivityDto'
+      responses:
+        '201':
+          description: Activity created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activity'
+        '400':
+          description: Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /activities/{id}:
+    get:
+      tags:
+        - activities
+      summary: Get activity by ID
+      description: Retrieve detailed information about a specific activity
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Activity ID
+          schema:
+            type: string
+            example: cm5xyz789abc123
+      responses:
+        '200':
+          description: Activity details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activity'
+        '404':
+          description: Activity not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    patch:
+      tags:
+        - activities
+      summary: Update activity
+      description: Update an existing activity's details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Activity ID
+          schema:
+            type: string
+            example: cm5xyz789abc123
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateActivityDto'
+      responses:
+        '200':
+          description: Activity updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activity'
+        '400':
+          description: Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Activity not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    delete:
+      tags:
+        - activities
+      summary: Delete activity
+      description: Delete an existing activity
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Activity ID
+          schema:
+            type: string
+            example: cm5xyz789abc123
+      responses:
+        '204':
+          description: Activity deleted successfully
+        '404':
+          description: Activity not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /activities/{id}/participants:
+    get:
+      tags:
+        - participants
+      summary: Get activity participants
+      description: Retrieve list of participants for a specific activity
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Activity ID
+          schema:
+            type: string
+            example: cm5xyz789abc123
+      responses:
+        '200':
+          description: List of participants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Participant'
+        '404':
+          description: Activity not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    post:
+      tags:
+        - participants
+      summary: Add participant to activity
+      description: Add a user as a participant to an activity with a specific role
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Activity ID
+          schema:
+            type: string
+            example: cm5xyz789abc123
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddParticipantDto'
+      responses:
+        '201':
+          description: Participant added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participant'
+        '400':
+          description: Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Activity or user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /activities/{activityId}/participants/{userId}:
+    delete:
+      tags:
+        - participants
+      summary: Remove participant from activity
+      description: |
+        Remove a user from an activity. Only the activity organizer can remove other participants.
+        Organizers cannot remove themselves from their own activities.
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          description: Activity ID
+          schema:
+            type: string
+            example: cm5xyz789abc123
+        - name: userId
+          in: path
+          required: true
+          description: User ID of the participant to remove
+          schema:
+            type: string
+            example: cm5abc123def456
+      requestBody:
+        description: Request body containing the requesting user's ID for authorization
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                requestingUserId:
+                  type: string
+                  description: ID of the user making the request (must be the organizer)
+                  example: cm5organizer123
+      responses:
+        '204':
+          description: Participant removed successfully
+        '403':
+          description: Forbidden - organizer cannot leave their own activity or non-organizer trying to remove participants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Activity or participant not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users:
+    get:
+      tags:
+        - users
+      summary: Get all users
+      description: Retrieve a paginated list of all users
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        '200':
+          description: Successful response with paginated users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/register:
+    post:
+      tags:
+        - users
+      summary: Register a new user
+      description: Register a new user via OAuth provider or email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterUserDto'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{id}:
+    get:
+      tags:
+        - users
+      summary: Get user by ID
+      description: Retrieve detailed information about a specific user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+            example: cm5abc123def456
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    patch:
+      tags:
+        - users
+      summary: Update user
+      description: Update an existing user's profile information
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+            example: cm5abc123def456
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserDto'
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{id}/activities:
+    get:
+      tags:
+        - users
+      summary: Get user's activities
+      description: Retrieve all activities that a user is participating in
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+            example: cm5abc123def456
+        - name: startTimeFrom
+          in: query
+          description: Filter activities starting from this time (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+            example: "2026-01-28T10:00:00Z"
+        - name: startTimeTo
+          in: query
+          description: Filter activities starting until this time (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+            example: "2026-01-30T18:00:00Z"
+      responses:
+        '200':
+          description: List of user's activities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Activity'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{id}/suggestions:
+    get:
+      tags:
+        - users
+      summary: Get activity suggestions for user
+      description: Retrieve personalized activity suggestions for a user based on their preferences and participation history
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+            example: cm5abc123def456
+        - name: limit
+          in: query
+          description: Maximum number of suggestions to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        '200':
+          description: List of suggested activities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Activity'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /recurrence-rules:
+    get:
+      tags:
+        - recurrence-rules
+      summary: Get all recurrence rules
+      description: Retrieve all recurrence rules with activity counts
+      responses:
+        '200':
+          description: List of recurrence rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecurrenceRule'
+    
+    post:
+      tags:
+        - recurrence-rules
+      summary: Create a new recurrence rule
+      description: Create a new recurrence rule with hash-based deduplication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRecurrenceRuleDto'
+      responses:
+        '201':
+          description: Recurrence rule created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurrenceRule'
+        '400':
+          description: Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Rule with these parameters already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /recurrence-rules/{id}:
+    get:
+      tags:
+        - recurrence-rules
+      summary: Get recurrence rule by ID
+      description: Retrieve detailed information about a specific recurrence rule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Recurrence rule ID
+          schema:
+            type: string
+            example: cm5rule123abc456
+      responses:
+        '200':
+          description: Recurrence rule details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurrenceRule'
+        '404':
+          description: Recurrence rule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    delete:
+      tags:
+        - recurrence-rules
+      summary: Delete recurrence rule
+      description: Delete an existing recurrence rule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Recurrence rule ID
+          schema:
+            type: string
+            example: cm5rule123abc456
+      responses:
+        '204':
+          description: Recurrence rule deleted successfully
+        '404':
+          description: Recurrence rule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /recurrence-rules/{id}/activities:
+    get:
+      tags:
+        - recurrence-rules
+      summary: Get activities created from rule
+      description: Retrieve all activities generated from a specific recurrence rule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Recurrence rule ID
+          schema:
+            type: string
+            example: cm5rule123abc456
+      responses:
+        '200':
+          description: List of activities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Activity'
+        '404':
+          description: Recurrence rule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /activities/{activityId}/messages:
+    get:
+      tags:
+        - activity-messages
+      summary: Get messages for an activity
+      description: Retrieve paginated messages for a specific activity
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          description: Activity ID
+          schema:
+            type: string
+            example: cm5xyz789abc123
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of messages per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: before
+          in: query
+          description: Get messages created before this timestamp (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+            example: "2026-01-28T12:00:00Z"
+        - name: after
+          in: query
+          description: Get messages created after this timestamp (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+            example: "2026-01-28T08:00:00Z"
+      responses:
+        '200':
+          description: Paginated list of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ActivityMessage'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '404':
+          description: Activity not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /activities/messages:
+    post:
+      tags:
+        - activity-messages
+      summary: Create a new message
+      description: Post a new message to an activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateActivityMessageDto'
+      responses:
+        '201':
+          description: Message created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityMessage'
+        '400':
+          description: Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Activity or user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /activities/messages/{id}:
+    patch:
+      tags:
+        - activity-messages
+      summary: Update message
+      description: Update message content (only by message author)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Message ID
+          schema:
+            type: string
+            example: cm5msg123abc456
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/UpdateActivityMessageDto'
+                - type: object
+                  required:
+                    - userId
+                  properties:
+                    userId:
+                      type: string
+                      description: User ID for authorization check
+      responses:
+        '200':
+          description: Message updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityMessage'
+        '400':
+          description: Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: User can only edit their own messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Message not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    delete:
+      tags:
+        - activity-messages
+      summary: Delete message
+      description: Delete a message (only by message author)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Message ID
+          schema:
+            type: string
+            example: cm5msg123abc456
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+              properties:
+                userId:
+                  type: string
+                  description: User ID for authorization check
+      responses:
+        '204':
+          description: Message deleted successfully
+        '403':
+          description: User can only delete their own messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Message not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+
+components:
+  schemas:
+    Activity:
+      type: object
+      properties:
+        id:
+          type: string
+          example: cm5xyz789abc123
+          description: Unique activity identifier
+        name:
+          type: string
+          example: Tennis Match
+          description: Name of the activity
+        type:
+          type: string
+          example: tennis
+          description: Type/category of activity
+        location:
+          type: string
+          nullable: true
+          example: Central Park
+          description: Location where the activity takes place
+        startTime:
+          type: string
+          format: date-time
+          example: "2026-01-28T10:00:00Z"
+          description: Activity start time in ISO 8601 format
+        endTime:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-01-28T12:00:00Z"
+          description: Activity end time in ISO 8601 format
+        maxParticipants:
+          type: integer
+          nullable: true
+          example: 10
+          description: Maximum number of participants allowed
+        state:
+          type: string
+          enum: [active, cancelled, completed]
+          default: active
+          example: active
+          description: Current state of the activity
+        organizerId:
+          type: string
+          example: cm5abc123def456
+          description: User ID of the activity organizer/owner
+        ruleId:
+          type: string
+          nullable: true
+          example: cm5rule123abc456
+          description: Reference to RecurrenceRule if created from a rule
+        requiresApproval:
+          type: boolean
+          default: false
+          example: false
+          description: Whether new participants need organizer approval to join
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-01-20T08:30:00Z"
+          description: Activity creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-01-22T14:15:00Z"
+          description: Last update timestamp
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Participant'
+          description: List of participants (included in detailed responses)
+
+    CreateActivityDto:
+      type: object
+      required:
+        - name
+        - type
+        - startTime
+        - organizerId
+      properties:
+        name:
+          type: string
+          example: Tennis Match
+          description: Name of the activity
+        type:
+          type: string
+          example: tennis
+          description: Type/category of activity
+        location:
+          type: string
+          example: Central Park
+          description: Location where the activity takes place
+        startTime:
+          type: string
+          format: date-time
+          example: "2026-01-28T10:00:00Z"
+          description: Activity start time in ISO 8601 format
+        endTime:
+          type: string
+          format: date-time
+          example: "2026-01-28T12:00:00Z"
+          description: Activity end time in ISO 8601 format
+        maxParticipants:
+          type: integer
+          minimum: 1
+          example: 10
+          description: Maximum number of participants allowed
+        state:
+          type: string
+          enum: [active, cancelled, completed]
+          default: active
+          example: active
+          description: Initial state of the activity
+        organizerId:
+          type: string
+          example: cm5abc123def456
+          description: User ID of the activity organizer/owner
+        ruleId:
+          type: string
+          example: cm5rule123abc456
+          description: Reference to RecurrenceRule if created from a rule
+        requiresApproval:
+          type: boolean
+          default: false
+          example: false
+          description: Whether new participants need organizer approval to join
+
+    UpdateActivityDto:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Tennis Match (Updated)
+          description: Name of the activity
+        type:
+          type: string
+          example: tennis
+          description: Type/category of activity
+        location:
+          type: string
+          nullable: true
+          example: Central Park
+          description: Location where the activity takes place
+        startTime:
+          type: string
+          format: date-time
+          example: "2026-01-28T10:00:00Z"
+          description: Activity start time in ISO 8601 format
+        endTime:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-01-28T12:00:00Z"
+          description: Activity end time in ISO 8601 format
+        maxParticipants:
+          type: integer
+          nullable: true
+          minimum: 1
+          example: 10
+          description: Maximum number of participants allowed
+        state:
+          type: string
+          enum: [active, cancelled, completed]
+          example: active
+          description: Current state of the activity
+        ruleId:
+          type: string
+          nullable: true
+          example: cm5rule123abc456
+          description: Reference to RecurrenceRule if created from a rule
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: cm5abc123def456
+          description: Unique user identifier
+        email:
+          type: string
+          format: email
+          nullable: true
+          example: user@example.com
+          description: User's email address
+        name:
+          type: string
+          nullable: true
+          example: John Doe
+          description: User's display name
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: https://example.com/avatar.jpg
+          description: URL to user's avatar image
+        provider:
+          type: string
+          example: google
+          description: OAuth provider (google, facebook, apple, email)
+        providerId:
+          type: string
+          example: "123456789"
+          description: User's ID from the OAuth provider
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-01-15T09:00:00Z"
+          description: User registration timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-01-20T11:30:00Z"
+          description: Last update timestamp
+
+    RegisterUserDto:
+      type: object
+      required:
+        - provider
+        - providerId
+      properties:
+        provider:
+          type: string
+          example: google
+          description: OAuth provider (google, facebook, apple, email)
+        providerId:
+          type: string
+          example: "123456789"
+          description: User's ID from the OAuth provider
+        email:
+          type: string
+          format: email
+          example: user@example.com
+          description: User's email address
+        name:
+          type: string
+          example: John Doe
+          description: User's display name
+        avatarUrl:
+          type: string
+          format: uri
+          example: https://example.com/avatar.jpg
+          description: URL to user's avatar image
+
+    UpdateUserDto:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: newemail@example.com
+          description: User's email address
+        name:
+          type: string
+          example: Jane Doe
+          description: User's display name
+        avatarUrl:
+          type: string
+          format: uri
+          example: https://example.com/new-avatar.jpg
+          description: URL to user's avatar image
+
+    Participant:
+      type: object
+      properties:
+        id:
+          type: string
+          example: cm5part789xyz123
+          description: Unique participant record identifier
+        activityId:
+          type: string
+          example: cm5xyz789abc123
+          description: ID of the activity
+        userId:
+          type: string
+          example: cm5abc123def456
+          description: ID of the user
+        role:
+          type: string
+          nullable: true
+          enum: [participant, organizer]
+          example: participant
+          description: Role of the participant in the activity
+        joinedAt:
+          type: string
+          format: date-time
+          example: "2026-01-22T10:00:00Z"
+          description: Timestamp when the user joined the activity
+        user:
+          $ref: '#/components/schemas/User'
+          description: User details (included in expanded responses)
+
+    AddParticipantDto:
+      type: object
+      required:
+        - userId
+        - role
+      properties:
+        userId:
+          type: string
+          example: cm5abc123def456
+          description: ID of the user to add as participant
+        role:
+          type: string
+          enum: [participant, organizer]
+          example: participant
+          description: Role of the participant in the activity
+
+    PaginationMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 150
+          description: Total number of items
+        page:
+          type: integer
+          example: 1
+          description: Current page number
+        limit:
+          type: integer
+          example: 10
+          description: Number of items per page
+        totalPages:
+          type: integer
+          example: 15
+          description: Total number of pages
+
+    Error:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          example: 400
+          description: HTTP status code
+        message:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+          example: Validation failed
+          description: Error message or array of error messages
+        error:
+          type: string
+          example: Bad Request
+          description: Error type
+
+    RecurrenceRule:
+      type: object
+      properties:
+        id:
+          type: string
+          example: cm5rule123abc456
+          description: Unique recurrence rule identifier
+        frequency:
+          type: string
+          enum: [daily, weekly, monthly]
+          example: weekly
+          description: Frequency of recurrence
+        interval:
+          type: integer
+          example: 1
+          description: Interval for recurrence (e.g., 1 = every, 2 = every other)
+        weekdays:
+          type: string
+          nullable: true
+          example: "mon,wed,fri"
+          description: Comma-separated weekdays for weekly recurrence
+        monthday:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 31
+          example: 15
+          description: Day of month for monthly recurrence
+        time:
+          type: string
+          pattern: "^([0-1][0-9]|2[0-3]):[0-5][0-9]$"
+          example: "14:30"
+          description: Time in HH:mm format
+        hash:
+          type: string
+          example: "abc123def456..."
+          description: Hash of rule parameters for deduplication
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-01-20T08:30:00Z"
+          description: Rule creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-01-22T14:15:00Z"
+          description: Last update timestamp
+
+    CreateRecurrenceRuleDto:
+      type: object
+      required:
+        - frequency
+        - interval
+        - time
+      properties:
+        frequency:
+          type: string
+          enum: [daily, weekly, monthly]
+          example: weekly
+          description: Frequency of recurrence
+        interval:
+          type: integer
+          minimum: 1
+          example: 1
+          description: Interval for recurrence
+        weekdays:
+          type: string
+          example: "mon,wed,fri"
+          description: Comma-separated weekdays for weekly recurrence
+        monthday:
+          type: integer
+          minimum: 1
+          maximum: 31
+          example: 15
+          description: Day of month for monthly recurrence
+        time:
+          type: string
+          pattern: "^([0-1][0-9]|2[0-3]):[0-5][0-9]$"
+          example: "14:30"
+          description: Time in HH:mm format
+
+    ActivityMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          example: cm5msg123abc456
+          description: Unique message identifier
+        activityId:
+          type: string
+          example: cm5xyz789abc123
+          description: ID of the activity
+        userId:
+          type: string
+          example: cm5abc123def456
+          description: ID of the message author
+        content:
+          type: string
+          example: "Looking forward to this!"
+          description: Message content
+        type:
+          type: string
+          enum: [TEXT, IMAGE, AUDIO, VIDEO, SYSTEM]
+          default: TEXT
+          example: TEXT
+          description: Type of message
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-01-22T10:00:00Z"
+          description: Message creation timestamp
+        editedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-01-22T11:00:00Z"
+          description: Last edit timestamp
+        user:
+          type: object
+          description: Message author details
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            avatarUrl:
+              type: string
+
+    CreateActivityMessageDto:
+      type: object
+      required:
+        - activityId
+        - userId
+        - content
+      properties:
+        activityId:
+          type: string
+          example: cm5xyz789abc123
+          description: ID of the activity
+        userId:
+          type: string
+          example: cm5abc123def456
+          description: ID of the message author
+        content:
+          type: string
+          example: "Looking forward to this!"
+          description: Message content
+        type:
+          type: string
+          enum: [TEXT, IMAGE, AUDIO, VIDEO, SYSTEM]
+          default: TEXT
+          example: TEXT
+          description: Type of message
+
+    UpdateActivityMessageDto:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          example: "Updated message content"
+          description: New message content
