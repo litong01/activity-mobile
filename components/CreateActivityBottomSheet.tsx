@@ -79,6 +79,10 @@ export default function CreateActivityBottomSheet({
   const [commentText, setCommentText] = useState("");
   const [isProMode, setIsProMode] = useState(false);
 
+  // Date/time validation
+  const [parsedDate, setParsedDate] = useState<Date | null>(null);
+  const [dateError, setDateError] = useState("");
+
   // ProMode fields
   const [activityType, setActivityType] = useState("social");
   const [maxParticipants, setMaxParticipants] = useState("10");
@@ -148,6 +152,100 @@ export default function CreateActivityBottomSheet({
     resetForm();
     onClose();
   }, [onClose, resetForm]);
+
+  // Parse and validate date/time input
+  const parseDateTime = useCallback(
+    (input: string): { date: Date | null; error: string } => {
+      if (!input.trim()) {
+        return { date: null, error: "Please enter a date and time" };
+      }
+
+      const inputLower = input.trim().toLowerCase();
+      let baseDate = new Date();
+
+      // Handle "today" or "tomorrow"
+      if (inputLower.includes("tomorrow")) {
+        baseDate.setDate(baseDate.getDate() + 1);
+      }
+
+      // Handle month/day patterns like "feb 10", "2/10"
+      const dateMatch = inputLower.match(
+        /(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d+)|(\d{1,2})\/(\d{1,2})/i,
+      );
+      if (dateMatch) {
+        if (dateMatch[1]) {
+          const day = parseInt(dateMatch[1]);
+          const monthMap: { [key: string]: number } = {
+            jan: 0,
+            feb: 1,
+            mar: 2,
+            apr: 3,
+            may: 4,
+            jun: 5,
+            jul: 6,
+            aug: 7,
+            sep: 8,
+            oct: 9,
+            nov: 10,
+            dec: 11,
+          };
+          const monthStr = inputLower.match(
+            /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i,
+          )?.[0];
+          if (monthStr) {
+            baseDate.setMonth(monthMap[monthStr.toLowerCase()]);
+            baseDate.setDate(day);
+          }
+        } else if (dateMatch[2] && dateMatch[3]) {
+          baseDate.setMonth(parseInt(dateMatch[2]) - 1);
+          baseDate.setDate(parseInt(dateMatch[3]));
+        }
+      }
+
+      // Parse time (3pm, 10am, 15:00, etc.)
+      const timeMatch = inputLower.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
+      if (timeMatch) {
+        let hours = parseInt(timeMatch[1]);
+        const minutes = parseInt(timeMatch[2] || "0");
+        const isPM = timeMatch[3]?.toLowerCase() === "pm";
+
+        if (isPM && hours < 12) hours += 12;
+        if (!isPM && hours === 12) hours = 0;
+
+        baseDate.setHours(hours, minutes, 0, 0);
+      } else if (
+        inputLower !== "today" &&
+        !inputLower.includes("tomorrow") &&
+        !dateMatch
+      ) {
+        return {
+          date: null,
+          error: "Could not understand the date/time format",
+        };
+      }
+
+      // Check if date is in the past
+      const now = new Date();
+      if (baseDate < now) {
+        return { date: null, error: "Date and time cannot be in the past" };
+      }
+
+      return { date: baseDate, error: "" };
+    },
+    [],
+  );
+
+  const handleDateTimeBlur = useCallback(() => {
+    if (!startTime.trim()) {
+      setParsedDate(null);
+      setDateError("");
+      return;
+    }
+
+    const result = parseDateTime(startTime);
+    setParsedDate(result.date);
+    setDateError(result.error);
+  }, [startTime, parseDateTime]);
 
   const handleCreate = useCallback(() => {
     if (!title.trim()) return;
@@ -331,7 +429,12 @@ export default function CreateActivityBottomSheet({
     }
   }, [activity, onAddComment, commentText]);
 
-  const canSubmit = title.trim().length > 0;
+  const canSubmit =
+    title.trim().length > 0 &&
+    startTime.trim().length > 0 &&
+    location.trim().length > 0 &&
+    !dateError &&
+    parsedDate !== null;
   const isCreateMode = activity === null;
   const sheetIndex = activity !== undefined ? 0 : -1; // Open if activity is set (null or object)
 
@@ -421,14 +524,32 @@ export default function CreateActivityBottomSheet({
                     backgroundColor:
                       colorScheme === "dark" ? "#333" : "#f5f5f5",
                     color: colors.text,
-                    borderColor: colors.tint,
+                    borderColor: dateError ? "#ff4444" : colors.tint,
                   },
                 ]}
                 placeholder="e.g. today 3pm, tomorrow 10am, Feb 10 2pm"
                 placeholderTextColor={colorScheme === "dark" ? "#999" : "#666"}
                 value={startTime}
                 onChangeText={setStartTime}
+                onBlur={handleDateTimeBlur}
               />
+              {dateError ? (
+                <Text style={[styles.errorText, { color: "#ff4444" }]}>
+                  {dateError}
+                </Text>
+              ) : parsedDate ? (
+                <Text style={[styles.successText, { color: "#4CAF50" }]}>
+                  ✓{" "}
+                  {parsedDate.toLocaleString("en-US", {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                    hour12: true,
+                  })}
+                </Text>
+              ) : null}
             </View>
 
             <View style={styles.section}>
@@ -810,6 +931,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 6,
     opacity: 0.7,
+  },
+  errorText: {
+    fontSize: 12,
+    marginTop: 6,
+    fontWeight: "500",
+  },
+  successText: {
+    fontSize: 12,
+    marginTop: 6,
+    fontWeight: "500",
   },
   createButton: {
     flexDirection: "row",
