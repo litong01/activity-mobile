@@ -73,23 +73,23 @@ export default function CreateActivityBottomSheet({
   const bottomSheetRef = useRef<BottomSheet>(null);
 
   const [title, setTitle] = useState("");
-  const [activityType, setActivityType] = useState("social");
   const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
-  const [maxParticipants, setMaxParticipants] = useState("2");
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [commentText, setCommentText] = useState("");
+  const [isProMode, setIsProMode] = useState(false);
+
+  // ProMode fields
+  const [activityType, setActivityType] = useState("social");
+  const [maxParticipants, setMaxParticipants] = useState("10");
+  const [duration, setDuration] = useState("1 hour");
 
   const snapPoints = useMemo(() => ["75%", "90%"], []);
 
   const resetForm = useCallback(() => {
     setTitle("");
-    setActivityType("social");
     setStartTime("");
-    setEndTime("");
     setLocation("");
-    setMaxParticipants("2");
     setRequiresApproval(false);
     setCommentText("");
   }, []);
@@ -100,9 +100,21 @@ export default function CreateActivityBottomSheet({
       setTitle(activity.name);
       setActivityType(activity.type);
       setStartTime(activity.startTime);
-      setEndTime(activity.endTime || "");
+      // Calculate duration from start and end time
+      if (activity.endTime) {
+        const start = new Date(activity.startTime);
+        const end = new Date(activity.endTime);
+        const diffMs = end.getTime() - start.getTime();
+        const diffHours = diffMs / (1000 * 60 * 60);
+        if (diffHours >= 1) {
+          setDuration(`${diffHours} hour${diffHours > 1 ? "s" : ""}`);
+        } else {
+          const diffMins = Math.round(diffMs / (1000 * 60));
+          setDuration(`${diffMins} minute${diffMins > 1 ? "s" : ""}`);
+        }
+      }
       setLocation(activity.location || "");
-      setMaxParticipants(activity.maxParticipants?.toString() || "");
+      setMaxParticipants(activity.maxParticipants?.toString() || "10");
       setRequiresApproval(activity.requiresApproval || false);
     } else {
       // Reset form for create mode
@@ -140,13 +152,88 @@ export default function CreateActivityBottomSheet({
   const handleCreate = useCallback(() => {
     if (!title.trim()) return;
 
-    // Parse the start time input or use current time
+    // Deduce activity type from title
+    const titleLower = title.toLowerCase();
+    let deducedType = "social"; // default
+
+    if (titleLower.includes("tennis")) deducedType = "tennis";
+    else if (titleLower.includes("basketball")) deducedType = "basketball";
+    else if (titleLower.includes("sport") || titleLower.includes("game"))
+      deducedType = "sports";
+    else if (
+      titleLower.includes("music") ||
+      titleLower.includes("concert") ||
+      titleLower.includes("band")
+    )
+      deducedType = "music";
+    else if (
+      titleLower.includes("food") ||
+      titleLower.includes("dinner") ||
+      titleLower.includes("lunch") ||
+      titleLower.includes("coffee")
+    )
+      deducedType = "food";
+    else if (
+      titleLower.includes("hike") ||
+      titleLower.includes("outdoor") ||
+      titleLower.includes("camping")
+    )
+      deducedType = "outdoor";
+    else if (
+      titleLower.includes("learn") ||
+      titleLower.includes("study") ||
+      titleLower.includes("class")
+    )
+      deducedType = "learning";
+
+    // Parse the start time input with natural language support
     let startTimeISO: string;
     if (startTime.trim()) {
-      const timeStr = startTime.trim();
-      const now = new Date();
+      const input = startTime.trim().toLowerCase();
+      let baseDate = new Date();
 
-      const timeMatch = timeStr.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
+      // Handle "today" or "tomorrow"
+      if (input.includes("tomorrow")) {
+        baseDate.setDate(baseDate.getDate() + 1);
+      }
+      // Handle month/day patterns like "feb 10", "2/10"
+      const dateMatch = input.match(
+        /(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d+)|(\d{1,2})\/(\d{1,2})/i,
+      );
+      if (dateMatch) {
+        if (dateMatch[1]) {
+          // "feb 10" format
+          const day = parseInt(dateMatch[1]);
+          const monthMap: { [key: string]: number } = {
+            jan: 0,
+            feb: 1,
+            mar: 2,
+            apr: 3,
+            may: 4,
+            jun: 5,
+            jul: 6,
+            aug: 7,
+            sep: 8,
+            oct: 9,
+            nov: 10,
+            dec: 11,
+          };
+          const monthStr = input.match(
+            /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i,
+          )?.[0];
+          if (monthStr) {
+            baseDate.setMonth(monthMap[monthStr.toLowerCase()]);
+            baseDate.setDate(day);
+          }
+        } else if (dateMatch[2] && dateMatch[3]) {
+          // "2/10" format
+          baseDate.setMonth(parseInt(dateMatch[2]) - 1);
+          baseDate.setDate(parseInt(dateMatch[3]));
+        }
+      }
+
+      // Parse time (3pm, 10am, 15:00, etc.)
+      const timeMatch = input.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
       if (timeMatch) {
         let hours = parseInt(timeMatch[1]);
         const minutes = parseInt(timeMatch[2] || "0");
@@ -155,58 +242,72 @@ export default function CreateActivityBottomSheet({
         if (isPM && hours < 12) hours += 12;
         if (!isPM && hours === 12) hours = 0;
 
-        now.setHours(hours, minutes, 0, 0);
-        startTimeISO = now.toISOString();
-      } else {
-        startTimeISO = new Date().toISOString();
+        baseDate.setHours(hours, minutes, 0, 0);
       }
+
+      startTimeISO = baseDate.toISOString();
     } else {
       startTimeISO = new Date().toISOString();
     }
 
-    // Parse the end time if provided
-    let endTimeISO: string | undefined;
-    if (endTime.trim()) {
-      const timeStr = endTime.trim();
-      const now = new Date(startTimeISO); // Start from start time
+    // Default to 1 hour duration
+    let endTimeISO: string;
+    if (isProMode && duration.trim()) {
+      // Parse duration input in ProMode
+      const input = duration.trim().toLowerCase();
+      const startDate = new Date(startTimeISO);
 
-      const timeMatch = timeStr.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
-      if (timeMatch) {
-        let hours = parseInt(timeMatch[1]);
-        const minutes = parseInt(timeMatch[2] || "0");
-        const isPM = timeMatch[3]?.toLowerCase() === "pm";
+      const hourMatch = input.match(/(\d+(?:\.\d+)?)\s*(?:hour|hr)/);
+      const minMatch = input.match(/(\d+)\s*(?:minute|min)/);
 
-        if (isPM && hours < 12) hours += 12;
-        if (!isPM && hours === 12) hours = 0;
-
-        now.setHours(hours, minutes, 0, 0);
-        endTimeISO = now.toISOString();
+      if (hourMatch) {
+        const hours = parseFloat(hourMatch[1]);
+        startDate.setMinutes(startDate.getMinutes() + hours * 60);
+        endTimeISO = startDate.toISOString();
+      } else if (minMatch) {
+        const minutes = parseInt(minMatch[1]);
+        startDate.setMinutes(startDate.getMinutes() + minutes);
+        endTimeISO = startDate.toISOString();
+      } else {
+        // Default to 1 hour if parse fails
+        const endDate = new Date(startTimeISO);
+        endDate.setHours(endDate.getHours() + 1);
+        endTimeISO = endDate.toISOString();
       }
+    } else {
+      // EasyMode: default to 1 hour
+      const endDate = new Date(startTimeISO);
+      endDate.setHours(endDate.getHours() + 1);
+      endTimeISO = endDate.toISOString();
     }
 
-    const maxParts = maxParticipants.trim()
-      ? parseInt(maxParticipants.trim())
-      : undefined;
+    // Use ProMode type if active, otherwise deduce from title
+    const finalType = isProMode ? activityType : deducedType;
+    const finalMaxParticipants =
+      isProMode && maxParticipants.trim()
+        ? parseInt(maxParticipants.trim())
+        : 10;
 
     onCreate({
       name: title.trim(),
-      type: activityType,
+      type: finalType,
       startTime: startTimeISO,
       endTime: endTimeISO,
       location: location.trim() || undefined,
-      maxParticipants: maxParts,
+      maxParticipants: finalMaxParticipants,
       organizerId: AppConfig.mockUser.id,
       requiresApproval: requiresApproval,
     });
     resetForm();
   }, [
     title,
-    activityType,
     startTime,
-    endTime,
     location,
-    maxParticipants,
     requiresApproval,
+    isProMode,
+    activityType,
+    maxParticipants,
+    duration,
     onCreate,
     resetForm,
   ]);
@@ -258,6 +359,27 @@ export default function CreateActivityBottomSheet({
           <Text style={[styles.title, { color: colors.text }]}>
             {isCreateMode ? "Create new activity" : activity?.name}
           </Text>
+          {isCreateMode && (
+            <TouchableOpacity
+              onPress={() => setIsProMode(!isProMode)}
+              style={styles.modeToggle}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              activeOpacity={0.6}
+            >
+              <View
+                style={[
+                  styles.radioButton,
+                  { borderColor: colors.tint },
+                  isProMode && { backgroundColor: colors.tint },
+                ]}
+              >
+                {isProMode && <View style={styles.radioButtonInner} />}
+              </View>
+              <Text style={[styles.modeToggleText, { color: colors.text }]}>
+                {isProMode ? "Pro Mode" : "Easy Mode"}
+              </Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             onPress={handleClose}
             style={styles.closeButton}
@@ -282,7 +404,7 @@ export default function CreateActivityBottomSheet({
                     borderColor: colors.tint,
                   },
                 ]}
-                placeholder="Activity title"
+                placeholder="e.g. Tennis Match, Basketball Game, Coffee Meetup"
                 placeholderTextColor={colorScheme === "dark" ? "#999" : "#666"}
                 value={title}
                 onChangeText={setTitle}
@@ -291,40 +413,7 @@ export default function CreateActivityBottomSheet({
             </View>
 
             <View style={styles.section}>
-              <Text style={[styles.label, { color: colors.text }]}>Type</Text>
-              <View style={styles.typeRow}>
-                {ACTIVITY_TYPES.map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    onPress={() => setActivityType(type)}
-                    style={[
-                      styles.typeChip,
-                      {
-                        backgroundColor:
-                          activityType === type
-                            ? colors.tint
-                            : colors.background,
-                        borderColor: colors.tint,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.typeChipText,
-                        { color: activityType === type ? "#fff" : colors.text },
-                      ]}
-                    >
-                      {type}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={[styles.label, { color: colors.text }]}>
-                Start Time
-              </Text>
+              <Text style={[styles.label, { color: colors.text }]}>When</Text>
               <TextInput
                 style={[
                   styles.input,
@@ -335,31 +424,10 @@ export default function CreateActivityBottomSheet({
                     borderColor: colors.tint,
                   },
                 ]}
-                placeholder="e.g. 3:00 PM or 15:00"
+                placeholder="e.g. today 3pm, tomorrow 10am, Feb 10 2pm"
                 placeholderTextColor={colorScheme === "dark" ? "#999" : "#666"}
                 value={startTime}
                 onChangeText={setStartTime}
-              />
-            </View>
-
-            <View style={styles.section}>
-              <Text style={[styles.label, { color: colors.text }]}>
-                End Time (optional)
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor:
-                      colorScheme === "dark" ? "#333" : "#f5f5f5",
-                    color: colors.text,
-                    borderColor: colors.tint,
-                  },
-                ]}
-                placeholder="e.g. 5:00 PM or 17:00"
-                placeholderTextColor={colorScheme === "dark" ? "#999" : "#666"}
-                value={endTime}
-                onChangeText={setEndTime}
               />
             </View>
 
@@ -384,60 +452,118 @@ export default function CreateActivityBottomSheet({
               />
             </View>
 
-            <View style={styles.section}>
-              <Text style={[styles.label, { color: colors.text }]}>
-                Max Participants
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor:
-                      colorScheme === "dark" ? "#333" : "#f5f5f5",
-                    color: colors.text,
-                    borderColor: colors.tint,
-                  },
-                ]}
-                placeholder="e.g. 2, 4, 10"
-                placeholderTextColor={colorScheme === "dark" ? "#999" : "#666"}
-                value={maxParticipants}
-                onChangeText={setMaxParticipants}
-                keyboardType="number-pad"
-              />
-            </View>
-
-            <View style={styles.section}>
-              <View style={styles.switchRow}>
-                <Text style={[styles.label, { color: colors.text }]}>
-                  Requires Approval
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setRequiresApproval(!requiresApproval)}
-                  style={[
-                    styles.switch,
-                    {
-                      backgroundColor: requiresApproval
-                        ? colors.tint
-                        : colorScheme === "dark"
-                          ? "#333"
-                          : "#ccc",
-                    },
-                  ]}
-                >
-                  <View
+            {isProMode && (
+              <>
+                <View style={styles.section}>
+                  <Text style={[styles.label, { color: colors.text }]}>
+                    Type
+                  </Text>
+                  <TextInput
                     style={[
-                      styles.switchThumb,
+                      styles.input,
                       {
-                        transform: [{ translateX: requiresApproval ? 22 : 2 }],
+                        backgroundColor:
+                          colorScheme === "dark" ? "#333" : "#f5f5f5",
+                        color: colors.text,
+                        borderColor: colors.tint,
                       },
                     ]}
+                    placeholder="e.g. tennis, basketball, social"
+                    placeholderTextColor={
+                      colorScheme === "dark" ? "#999" : "#666"
+                    }
+                    value={activityType}
+                    onChangeText={setActivityType}
+                    autoCapitalize="none"
                   />
-                </TouchableOpacity>
-              </View>
+                  <Text style={[styles.helperText, { color: colors.text }]}>
+                    Suggestions: sports, music, food, social, outdoor, learning,
+                    tennis, basketball
+                  </Text>
+                </View>
+
+                <View style={styles.section}>
+                  <View style={styles.rowContainer}>
+                    <View style={styles.halfWidth}>
+                      <Text style={[styles.label, { color: colors.text }]}>
+                        Max Participants
+                      </Text>
+                      <TextInput
+                        style={[
+                          styles.input,
+                          {
+                            backgroundColor:
+                              colorScheme === "dark" ? "#333" : "#f5f5f5",
+                            color: colors.text,
+                            borderColor: colors.tint,
+                          },
+                        ]}
+                        placeholder="e.g. 10"
+                        placeholderTextColor={
+                          colorScheme === "dark" ? "#999" : "#666"
+                        }
+                        value={maxParticipants}
+                        onChangeText={setMaxParticipants}
+                        keyboardType="number-pad"
+                      />
+                    </View>
+                    <View style={styles.halfWidth}>
+                      <Text style={[styles.label, { color: colors.text }]}>
+                        Duration
+                      </Text>
+                      <TextInput
+                        style={[
+                          styles.input,
+                          {
+                            backgroundColor:
+                              colorScheme === "dark" ? "#333" : "#f5f5f5",
+                            color: colors.text,
+                            borderColor: colors.tint,
+                          },
+                        ]}
+                        placeholder="e.g. 1 hour"
+                        placeholderTextColor={
+                          colorScheme === "dark" ? "#999" : "#666"
+                        }
+                        value={duration}
+                        onChangeText={setDuration}
+                      />
+                    </View>
+                  </View>
+                </View>
+              </>
+            )}
+
+            <View style={styles.section}>
+              <Text style={[styles.label, { color: colors.text }]}>
+                Requires Approval
+              </Text>
+              <TouchableOpacity
+                onPress={() => setRequiresApproval(!requiresApproval)}
+                style={[
+                  styles.switchContainer,
+                  {
+                    backgroundColor: requiresApproval
+                      ? colors.tint
+                      : colorScheme === "dark"
+                        ? "#333"
+                        : "#ccc",
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.switchThumb,
+                    {
+                      transform: [{ translateX: requiresApproval ? 22 : 2 }],
+                    },
+                  ]}
+                />
+              </TouchableOpacity>
               <Text style={[styles.helperText, { color: colors.text }]}>
                 {requiresApproval
-                  ? "You'll approve each participant request"
-                  : "Anyone can join immediately"}
+                  ? `You'll approve each participant request${!isProMode ? " (max 10 people)" : ""}`
+                  : `Anyone can join immediately${!isProMode ? " (max 10 people)" : ""}`}
               </Text>
             </View>
 
@@ -641,10 +767,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
   },
+  rowContainer: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  thirdWidth: {
+    flex: 0.35,
+  },
+  twoThirdsWidth: {
+    flex: 0.65,
+  },
+  halfWidth: {
+    flex: 1,
+  },
   switchRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  switchContainer: {
+    width: 50,
+    height: 48,
+    borderRadius: 13,
+    padding: 2,
+    justifyContent: "center",
+    alignSelf: "flex-start",
   },
   switch: {
     width: 50,
@@ -759,5 +906,29 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
+  },
+  modeToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  radioButton: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radioButtonInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#fff",
+  },
+  modeToggleText: {
+    fontSize: 11,
+    fontWeight: "400",
+    opacity: 0.6,
   },
 });
