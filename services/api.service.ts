@@ -42,18 +42,41 @@ class ApiService {
     };
 
     try {
+      console.log(
+        `[API] ${options.method || "GET"} ${this.baseUrl}${endpoint}`,
+      );
+      if (options.body) {
+        console.log("[API] Request body:", options.body);
+      }
+
       const response = await fetch(`${this.baseUrl}${endpoint}`, config);
 
+      console.log(`[API] Response status: ${response.status}`);
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorText = await response.text();
+        console.error(`[API] Error response:`, errorText);
+
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { message: errorText };
+        }
+
         throw new Error(
           errorData.message || `HTTP error! status: ${response.status}`,
         );
       }
 
-      return await response.json();
+      const responseData = await response.json();
+      console.log(
+        "[API] Response data:",
+        JSON.stringify(responseData).substring(0, 200),
+      );
+      return responseData;
     } catch (error) {
-      console.error(`API Error [${endpoint}]:`, error);
+      console.error(`[API] Error [${endpoint}]:`, error);
       throw error;
     }
   }
@@ -113,14 +136,11 @@ class ApiService {
     organizerId: string;
     requiresApproval?: boolean;
   }): Promise<Activity> {
-    const response = await this.fetch<ApiResponse<Activity>>(`/activities`, {
+    const response = await this.fetch<Activity>(`/activities`, {
       method: "POST",
       body: JSON.stringify(data),
     });
-    if (!response.data) {
-      throw new Error("Failed to create activity");
-    }
-    return response.data;
+    return response;
   }
 
   /**

@@ -33,9 +33,9 @@ export const AppConfig = {
 
   // Development mode mock user
   mockUser: {
-    id: "dev-user-123",
-    email: "dev@example.com",
-    name: "Dev User",
+    id: "cml73gl8m000067obvwxmpj72", // Alice Johnson
+    email: "alice@example.com",
+    name: "Alice Johnson",
     token: "mock-dev-token-12345",
   },
 };

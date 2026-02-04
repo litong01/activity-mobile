@@ -1,4 +1,5 @@
 import { useColorScheme } from "@/components/useColorScheme";
+import { AppConfig } from "@/config/app.config";
 import Colors from "@/constants/Colors";
 import {
   Activity,
@@ -73,8 +74,11 @@ export default function CreateActivityBottomSheet({
 
   const [title, setTitle] = useState("");
   const [activityType, setActivityType] = useState("social");
-  const [time, setTime] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
+  const [maxParticipants, setMaxParticipants] = useState("2");
+  const [requiresApproval, setRequiresApproval] = useState(false);
   const [commentText, setCommentText] = useState("");
 
   const snapPoints = useMemo(() => ["75%", "90%"], []);
@@ -82,8 +86,11 @@ export default function CreateActivityBottomSheet({
   const resetForm = useCallback(() => {
     setTitle("");
     setActivityType("social");
-    setTime("");
+    setStartTime("");
+    setEndTime("");
     setLocation("");
+    setMaxParticipants("2");
+    setRequiresApproval(false);
     setCommentText("");
   }, []);
 
@@ -92,8 +99,11 @@ export default function CreateActivityBottomSheet({
     if (activity) {
       setTitle(activity.name);
       setActivityType(activity.type);
-      setTime(activity.startTime);
+      setStartTime(activity.startTime);
+      setEndTime(activity.endTime || "");
       setLocation(activity.location || "");
+      setMaxParticipants(activity.maxParticipants?.toString() || "");
+      setRequiresApproval(activity.requiresApproval || false);
     } else {
       // Reset form for create mode
       resetForm();
@@ -129,17 +139,77 @@ export default function CreateActivityBottomSheet({
 
   const handleCreate = useCallback(() => {
     if (!title.trim()) return;
+
+    // Parse the start time input or use current time
+    let startTimeISO: string;
+    if (startTime.trim()) {
+      const timeStr = startTime.trim();
+      const now = new Date();
+
+      const timeMatch = timeStr.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
+      if (timeMatch) {
+        let hours = parseInt(timeMatch[1]);
+        const minutes = parseInt(timeMatch[2] || "0");
+        const isPM = timeMatch[3]?.toLowerCase() === "pm";
+
+        if (isPM && hours < 12) hours += 12;
+        if (!isPM && hours === 12) hours = 0;
+
+        now.setHours(hours, minutes, 0, 0);
+        startTimeISO = now.toISOString();
+      } else {
+        startTimeISO = new Date().toISOString();
+      }
+    } else {
+      startTimeISO = new Date().toISOString();
+    }
+
+    // Parse the end time if provided
+    let endTimeISO: string | undefined;
+    if (endTime.trim()) {
+      const timeStr = endTime.trim();
+      const now = new Date(startTimeISO); // Start from start time
+
+      const timeMatch = timeStr.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
+      if (timeMatch) {
+        let hours = parseInt(timeMatch[1]);
+        const minutes = parseInt(timeMatch[2] || "0");
+        const isPM = timeMatch[3]?.toLowerCase() === "pm";
+
+        if (isPM && hours < 12) hours += 12;
+        if (!isPM && hours === 12) hours = 0;
+
+        now.setHours(hours, minutes, 0, 0);
+        endTimeISO = now.toISOString();
+      }
+    }
+
+    const maxParts = maxParticipants.trim()
+      ? parseInt(maxParticipants.trim())
+      : undefined;
+
     onCreate({
       name: title.trim(),
       type: activityType,
-      startTime: time.trim() || new Date().toISOString(),
-      location: location.trim(),
-      organizerId: "temp-user-id", // TODO: Replace with actual user ID from auth
-      requiresApproval: false,
+      startTime: startTimeISO,
+      endTime: endTimeISO,
+      location: location.trim() || undefined,
+      maxParticipants: maxParts,
+      organizerId: AppConfig.mockUser.id,
+      requiresApproval: requiresApproval,
     });
     resetForm();
-    onClose();
-  }, [title, activityType, time, location, onCreate, resetForm, onClose]);
+  }, [
+    title,
+    activityType,
+    startTime,
+    endTime,
+    location,
+    maxParticipants,
+    requiresApproval,
+    onCreate,
+    resetForm,
+  ]);
 
   const handleJoin = useCallback(() => {
     if (activity && onJoin) {
@@ -252,7 +322,9 @@ export default function CreateActivityBottomSheet({
             </View>
 
             <View style={styles.section}>
-              <Text style={[styles.label, { color: colors.text }]}>Time</Text>
+              <Text style={[styles.label, { color: colors.text }]}>
+                Start Time
+              </Text>
               <TextInput
                 style={[
                   styles.input,
@@ -263,10 +335,31 @@ export default function CreateActivityBottomSheet({
                     borderColor: colors.tint,
                   },
                 ]}
-                placeholder="e.g. Today, 3:00 PM"
+                placeholder="e.g. 3:00 PM or 15:00"
                 placeholderTextColor={colorScheme === "dark" ? "#999" : "#666"}
-                value={time}
-                onChangeText={setTime}
+                value={startTime}
+                onChangeText={setStartTime}
+              />
+            </View>
+
+            <View style={styles.section}>
+              <Text style={[styles.label, { color: colors.text }]}>
+                End Time (optional)
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor:
+                      colorScheme === "dark" ? "#333" : "#f5f5f5",
+                    color: colors.text,
+                    borderColor: colors.tint,
+                  },
+                ]}
+                placeholder="e.g. 5:00 PM or 17:00"
+                placeholderTextColor={colorScheme === "dark" ? "#999" : "#666"}
+                value={endTime}
+                onChangeText={setEndTime}
               />
             </View>
 
@@ -289,6 +382,63 @@ export default function CreateActivityBottomSheet({
                 value={location}
                 onChangeText={setLocation}
               />
+            </View>
+
+            <View style={styles.section}>
+              <Text style={[styles.label, { color: colors.text }]}>
+                Max Participants
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor:
+                      colorScheme === "dark" ? "#333" : "#f5f5f5",
+                    color: colors.text,
+                    borderColor: colors.tint,
+                  },
+                ]}
+                placeholder="e.g. 2, 4, 10"
+                placeholderTextColor={colorScheme === "dark" ? "#999" : "#666"}
+                value={maxParticipants}
+                onChangeText={setMaxParticipants}
+                keyboardType="number-pad"
+              />
+            </View>
+
+            <View style={styles.section}>
+              <View style={styles.switchRow}>
+                <Text style={[styles.label, { color: colors.text }]}>
+                  Requires Approval
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setRequiresApproval(!requiresApproval)}
+                  style={[
+                    styles.switch,
+                    {
+                      backgroundColor: requiresApproval
+                        ? colors.tint
+                        : colorScheme === "dark"
+                          ? "#333"
+                          : "#ccc",
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.switchThumb,
+                      {
+                        transform: [{ translateX: requiresApproval ? 22 : 2 }],
+                      },
+                    ]}
+                  />
+                </TouchableOpacity>
+              </View>
+              <Text style={[styles.helperText, { color: colors.text }]}>
+                {requiresApproval
+                  ? "You'll approve each participant request"
+                  : "Anyone can join immediately"}
+              </Text>
             </View>
 
             <TouchableOpacity
@@ -490,6 +640,29 @@ const styles = StyleSheet.create({
   typeChipText: {
     fontSize: 14,
     fontWeight: "500",
+  },
+  switchRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  switch: {
+    width: 50,
+    height: 26,
+    borderRadius: 13,
+    padding: 2,
+    justifyContent: "center",
+  },
+  switchThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#fff",
+  },
+  helperText: {
+    fontSize: 12,
+    marginTop: 6,
+    opacity: 0.7,
   },
   createButton: {
     flexDirection: "row",

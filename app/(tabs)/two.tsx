@@ -122,17 +122,20 @@ export default function TabTwoScreen() {
     <ActivityItem activity={item} onPress={() => handleActivityPress(item)} />
   );
 
-  const handleCreateActivity = useCallback(async (form: CreateActivityForm) => {
-    try {
-      // TODO: call API to create activity
-      await apiService.createActivity(form);
-      setSelectedActivity(undefined);
-      await loadActivities(); // Refresh the list
-    } catch (error) {
-      console.error("Failed to create activity:", error);
-      Alert.alert("Error", "Failed to create activity. Please try again.");
-    }
-  }, []);
+  const handleCreateActivity = useCallback(
+    async (form: CreateActivityForm) => {
+      try {
+        const newActivity = await apiService.createActivity(form);
+        setSelectedActivity(undefined); // Close the bottom sheet
+        await loadActivities(); // Refresh the list
+        Alert.alert("Success", `Activity "${newActivity.name}" created!`);
+      } catch (error) {
+        console.error("Failed to create activity:", error);
+        Alert.alert("Error", "Failed to create activity. Please try again.");
+      }
+    },
+    [loadActivities],
+  );
 
   const handleJoin = async (activityId: string) => {
     try {
