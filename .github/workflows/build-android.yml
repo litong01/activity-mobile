@@ -70,7 +70,7 @@ jobs:
       - name: 🚀 Build Android Release
         if: ${{ inputs.build_type == 'release' }}
         working-directory: android
-        run: ./gradlew assembleRelease bundleRelease --parallel --build-cache --configuration-cache
+        run: ./gradlew assembleRelease bundleRelease --parallel --build-cache --no-configuration-cache
         env:
           KEYSTORE_FILE: release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -81,7 +81,7 @@ jobs:
       - name: 🚀 Build Android Debug
         if: ${{ inputs.build_type == 'debug' }}
         working-directory: android
-        run: ./gradlew assembleDebug --parallel --build-cache --configuration-cache
+        run: ./gradlew assembleDebug --parallel --build-cache --no-configuration-cache
         env:
           GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2
 
