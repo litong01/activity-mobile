@@ -1,31 +1,32 @@
 import { useColorScheme } from "@/components/useColorScheme";
 import { AppConfig } from "@/config/app.config";
 import Colors from "@/constants/Colors";
+import { authService } from "@/services/auth.service";
 import {
-  Activity,
-  formatActivityTime,
-  getActivityOrganizerName,
-  getParticipantCount,
-  isUserParticipant,
+    Activity,
+    formatActivityTime,
+    getActivityOrganizerName,
+    getParticipantCount,
+    isUserParticipant,
 } from "@/types/Activity";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import BottomSheet, {
-  BottomSheetBackdrop,
-  BottomSheetScrollView,
+    BottomSheetBackdrop,
+    BottomSheetScrollView,
 } from "@gorhom/bottom-sheet";
 import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 import {
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 const ACTIVITY_TYPES = [
@@ -393,7 +394,7 @@ export default function CreateActivityBottomSheet({
       endTime: endTimeISO,
       location: location.trim() || undefined,
       maxParticipants: finalMaxParticipants,
-      organizerId: AppConfig.mockUser.id,
+      organizerId: authService.getUser()?.id ?? AppConfig.mockUser.id,
       requiresApproval: requiresApproval,
     });
     resetForm();

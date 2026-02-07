@@ -137,3 +137,8 @@ If the app shows a white screen and you don't see the "enter URL" screen:
 | Simulator vs iPad | Simulator: localhost is correct. iPad: use **exp://\<Mac-IP\>:8082** in the dev client. |
 | Script vs Xcode | **ios/.xcode.env** is what Xcode uses. The script only edits that file; you can edit it in Xcode instead. |
 | Port | **8082** for this project (set in **ios/.xcode.env** as `RCT_METRO_PORT=8082`). |
+
+
+
+## start up xcode with the project
+open -a "Xcode" ios/activitymobile.xcworkspace

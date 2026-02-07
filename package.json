@@ -12,6 +12,7 @@
     "ios:run": "expo run:ios --no-bundler",
     "ios:iphone:run": "expo run:ios --no-bundler --device \"iPhone 17\"",
     "prebuild:clean": "expo prebuild --clean && node scripts/patch-xcode-env.js",
+    "android:local-properties": "node scripts/setup-android-sdk.js",
     "web": "expo start --web"
   },
   "dependencies": {
