@@ -114,10 +114,9 @@ class ApiService {
     const query = params.toString();
     const endpoint = `/activities${query ? `?${query}` : ""}`;
 
-    const response = await this.fetch<
-      Activity[] | { data?: Activity[]; meta?: unknown }
-    >(endpoint);
-    if (Array.isArray(response)) return response;
+    const response = await this.fetch<{ data?: Activity[]; meta?: unknown }>(
+      endpoint,
+    );
     return response.data ?? [];
   }
 
@@ -155,10 +154,9 @@ class ApiService {
       params.append("startTimeTo", filters.startTimeTo);
     const query = params.toString();
     const endpoint = `/users/${user.id}/activities${query ? `?${query}` : ""}`;
-    const response = await this.fetch<
-      Activity[] | { data?: Activity[]; meta?: unknown }
-    >(endpoint);
-    if (Array.isArray(response)) return response;
+    const response = await this.fetch<{ data?: Activity[]; meta?: unknown }>(
+      endpoint,
+    );
     return response.data ?? [];
   }
 
