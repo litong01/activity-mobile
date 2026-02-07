@@ -301,7 +301,11 @@ export default function TabOneScreen() {
   };
 
   const renderItem = ({ item }: { item: Activity }) => (
-    <ActivityItem activity={item} onPress={handleActivityPress} />
+    <ActivityItem
+      activity={item}
+      onPress={handleActivityPress}
+      showOrganizer={false}
+    />
   );
 
   const renderHeader = () => (

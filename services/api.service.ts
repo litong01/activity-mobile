@@ -113,6 +113,30 @@ class ApiService {
     return response.data;
   }
 
+  /**
+   * Get activities for the current user (organizer, participant, or requesting).
+   * Uses GET /users/{id}/activities. Returns [] if not authenticated.
+   */
+  async getMyActivities(filters?: {
+    startTimeFrom?: string;
+    startTimeTo?: string;
+  }): Promise<Activity[]> {
+    const user = authService.getUser();
+    if (!user?.id) return [];
+    const params = new URLSearchParams();
+    if (filters?.startTimeFrom)
+      params.append("startTimeFrom", filters.startTimeFrom);
+    if (filters?.startTimeTo)
+      params.append("startTimeTo", filters.startTimeTo);
+    const query = params.toString();
+    const endpoint = `/users/${user.id}/activities${query ? `?${query}` : ""}`;
+    const response = await this.fetch<Activity[] | ApiResponse<Activity[]>>(
+      endpoint,
+    );
+    if (Array.isArray(response)) return response;
+    return response?.data ?? [];
+  }
+
   async joinActivity(activityId: string): Promise<void> {
     await this.fetch<ApiResponse<void>>(`/activities/${activityId}/join`, {
       method: "POST",

@@ -1,9 +1,9 @@
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import {
-    Activity,
-    formatActivityTime,
-    getActivityOrganizerName,
+  Activity,
+  formatActivityTime,
+  getActivityOrganizerName,
 } from "@/types/Activity";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import React from "react";
@@ -12,6 +12,10 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 interface ActivityItemProps {
   activity: Activity;
   onPress: (activity: Activity) => void;
+  /** When false, organizer name is hidden (e.g. for privacy on "Around me" tab). Default true. */
+  showOrganizer?: boolean;
+  /** When set, shown in the organizer row instead of organizer name (e.g. "Requesting to join"). */
+  statusLabel?: string | null;
 }
 
 const activityIcons: Record<
@@ -29,7 +33,12 @@ const activityIcons: Record<
   default: "calendar",
 };
 
-export default function ActivityItem({ activity, onPress }: ActivityItemProps) {
+export default function ActivityItem({
+  activity,
+  onPress,
+  showOrganizer = true,
+  statusLabel,
+}: ActivityItemProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
 
@@ -86,12 +95,16 @@ export default function ActivityItem({ activity, onPress }: ActivityItemProps) {
           )}
         </View>
 
-        <View style={styles.organizerRow}>
-          <FontAwesome name="user" size={14} color={colors.tint} />
-          <Text style={[styles.organizerText, { color: colors.text }]}>
-            {getActivityOrganizerName(activity)}
-          </Text>
-        </View>
+        {showOrganizer && (
+          <View style={styles.organizerRow}>
+            <FontAwesome name="user" size={14} color={colors.tint} />
+            <Text style={[styles.organizerText, { color: colors.text }]}>
+              {statusLabel?.trim()
+                ? statusLabel.trim()
+                : getActivityOrganizerName(activity)}
+            </Text>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );

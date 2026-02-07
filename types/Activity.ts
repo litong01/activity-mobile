@@ -1,3 +1,5 @@
+import { authService } from "@/services/auth.service";
+
 export interface User {
   id: string;
   email?: string | null;
@@ -43,12 +45,16 @@ export interface Activity {
   maxParticipants?: number | null;
   state: "active" | "cancelled" | "completed";
   organizerId: string;
+  /** Set by API when organizer details are included (e.g. expanded response) */
+  organizerName?: string | null;
   ruleId?: string | null;
   requiresApproval: boolean;
   createdAt: string;
   updatedAt: string;
   participants?: Participant[];
   messages?: ActivityMessage[];
+  /** Set by API for "my activities" responses: organizer | participant | requesting */
+  myParticipationStatus?: "organizer" | "participant" | "requesting" | null;
 }
 
 // Legacy Comment type - can be removed once messages are fully implemented
@@ -62,8 +68,23 @@ export interface Comment {
 
 // Helper functions for Activity
 export function getActivityOrganizerName(activity: Activity): string {
-  const organizer = activity.participants?.find((p) => p.role === "organizer");
-  return organizer?.user?.name || "Unknown";
+  // 1) API may return organizerName directly
+  if (activity.organizerName?.trim()) {
+    return activity.organizerName.trim();
+  }
+  // 2) Organizer may be in participants with user populated
+  const organizerParticipant = activity.participants?.find(
+    (p) => p.role === "organizer",
+  );
+  if (organizerParticipant?.user?.name?.trim()) {
+    return organizerParticipant.user.name.trim();
+  }
+  // 3) Current user is the organizer (e.g. activity they just created)
+  const currentUser = authService.getUser();
+  if (currentUser?.id === activity.organizerId && currentUser?.name?.trim()) {
+    return currentUser.name.trim();
+  }
+  return "Unknown";
 }
 
 export function isUserParticipant(
@@ -72,6 +93,20 @@ export function isUserParticipant(
 ): boolean {
   if (!userId) return false;
   return activity.participants?.some((p) => p.userId === userId) || false;
+}
+
+/** Current user's relationship to this activity. "requesting" only when API sets myParticipationStatus. */
+export function getMyParticipationStatus(
+  activity: Activity,
+): "organizer" | "participant" | "requesting" | null {
+  if (activity.myParticipationStatus) {
+    return activity.myParticipationStatus;
+  }
+  const currentUser = authService.getUser();
+  if (!currentUser?.id) return null;
+  if (activity.organizerId === currentUser.id) return "organizer";
+  if (isUserParticipant(activity, currentUser.id)) return "participant";
+  return null;
 }
 
 export function getParticipantCount(activity: Activity): number {

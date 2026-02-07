@@ -1,22 +1,26 @@
 import ActivityItem from "@/components/ActivityItem";
 import CreateActivityBottomSheet, {
-  CreateActivityForm,
+    CreateActivityForm,
 } from "@/components/CreateActivityBottomSheet";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { apiService } from "@/services/api.service";
-import { Activity, getActivityOrganizerName } from "@/types/Activity";
+import {
+    Activity,
+    getActivityOrganizerName,
+    getMyParticipationStatus,
+} from "@/types/Activity";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 
 export default function TabTwoScreen() {
@@ -48,15 +52,15 @@ export default function TabTwoScreen() {
   }, [openCreate, router]);
 
   /**
-   * Load activities from API
+   * Load "my" activities (organizer, participant, or requesting) from API
    */
   const loadActivities = async () => {
     try {
       setIsLoading(true);
-      const data = await apiService.getActivities();
+      const data = await apiService.getMyActivities();
       setActivities(data);
     } catch (error) {
-      console.error("Failed to load activities:", error);
+      console.error("Failed to load my activities:", error);
       Alert.alert(
         "Error",
         "Failed to load activities. Please check your backend server is running.",
@@ -73,26 +77,17 @@ export default function TabTwoScreen() {
   const handleRefresh = async () => {
     try {
       setIsRefreshing(true);
-      const data = await apiService.getActivities();
+      const data = await apiService.getMyActivities();
       setActivities(data);
     } catch (error) {
-      console.error("Failed to refresh activities:", error);
+      console.error("Failed to refresh my activities:", error);
     } finally {
       setIsRefreshing(false);
     }
   };
 
-  // Filter to only show user's activities (owned or participating)
-  const myActivities = useMemo(() => {
-    // TODO: Replace with actual user ID from auth context
-    // For now, showing all activities until we have proper authentication
-    // Once auth is implemented, uncomment this:
-    // const currentUserId = authContext.user?.id;
-    // return activities.filter(
-    //   (activity) => activity.isParticipant || activity.organizerId === currentUserId
-    // );
-    return activities;
-  }, [activities]);
+  // getMyActivities() already returns only the user's activities (organizer, participant, requesting)
+  const myActivities = activities;
 
   // Filter activities based on search query
   const filteredActivities = useMemo(() => {
@@ -119,7 +114,15 @@ export default function TabTwoScreen() {
   }, []);
 
   const renderItem = ({ item }: { item: Activity }) => (
-    <ActivityItem activity={item} onPress={() => handleActivityPress(item)} />
+    <ActivityItem
+      activity={item}
+      onPress={() => handleActivityPress(item)}
+      statusLabel={
+        getMyParticipationStatus(item) === "requesting"
+          ? "Requesting to join"
+          : undefined
+      }
+    />
   );
 
   const handleCreateActivity = useCallback(
