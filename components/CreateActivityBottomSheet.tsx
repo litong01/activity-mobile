@@ -3,30 +3,30 @@ import { AppConfig } from "@/config/app.config";
 import Colors from "@/constants/Colors";
 import { authService } from "@/services/auth.service";
 import {
-    Activity,
-    formatActivityTime,
-    getActivityOrganizerName,
-    getParticipantCount,
-    isUserParticipant,
+  Activity,
+  formatActivityTime,
+  getActivityOrganizerName,
+  getActivityUserRole,
+  getParticipantCount
 } from "@/types/Activity";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import BottomSheet, {
-    BottomSheetBackdrop,
-    BottomSheetScrollView,
+  BottomSheetBackdrop,
+  BottomSheetScrollView,
 } from "@gorhom/bottom-sheet";
 import React, {
-    useCallback,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
 import {
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 const ACTIVITY_TYPES = [
@@ -53,12 +53,17 @@ export interface CreateActivityForm {
 }
 
 interface CreateActivityBottomSheetProps {
-  activity: Activity | null | undefined; // undefined = closed, null = create mode, Activity = edit/view mode
+  activity: Activity | null | undefined; // undefined = closed, null = create mode, Activity = view/edit mode
   onClose: () => void;
   onCreate: (form: CreateActivityForm) => void;
   onJoin?: (activityId: string) => void;
   onLeave?: (activityId: string) => void;
   onAddComment?: (activityId: string, comment: string) => void;
+  onEdit?: (activityId: string) => void;
+  onDelete?: (activityId: string) => void;
+  onUpdate?: (activityId: string, form: CreateActivityForm) => void;
+  /** When true and activity is set, open in edit mode (form pre-filled). */
+  initialEditMode?: boolean;
 }
 
 export default function CreateActivityBottomSheet({
@@ -68,6 +73,10 @@ export default function CreateActivityBottomSheet({
   onJoin,
   onLeave,
   onAddComment,
+  onEdit,
+  onDelete,
+  onUpdate,
+  initialEditMode = false,
 }: CreateActivityBottomSheetProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
@@ -79,6 +88,7 @@ export default function CreateActivityBottomSheet({
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [isProMode, setIsProMode] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   // Date/time validation
   const [parsedDate, setParsedDate] = useState<Date | null>(null);
@@ -99,7 +109,7 @@ export default function CreateActivityBottomSheet({
     setCommentText("");
   }, []);
 
-  // Populate form when in edit mode
+  // Populate form when viewing/editing an activity; reset when closed or create mode
   useEffect(() => {
     if (activity) {
       setTitle(activity.name);
@@ -122,10 +132,13 @@ export default function CreateActivityBottomSheet({
       setMaxParticipants(activity.maxParticipants?.toString() || "10");
       setRequiresApproval(activity.requiresApproval || false);
     } else {
-      // Reset form for create mode
+      setIsEditMode(false);
       resetForm();
     }
-  }, [activity, resetForm]);
+    if (activity && initialEditMode) {
+      setIsEditMode(true);
+    }
+  }, [activity, resetForm, initialEditMode]);
 
   const handleSheetChanges = useCallback(
     (index: number) => {
@@ -411,6 +424,79 @@ export default function CreateActivityBottomSheet({
     resetForm,
   ]);
 
+  const handleUpdate = useCallback(() => {
+    if (
+      !activity ||
+      !onUpdate ||
+      !title.trim() ||
+      !startTime.trim() ||
+      !location.trim() ||
+      !!dateError ||
+      !parsedDate
+    )
+      return;
+    const startTimeISO =
+      parsedDate?.toISOString() ?? new Date(startTime.trim()).toISOString();
+    let endTimeISO: string;
+    if (duration.trim()) {
+      const startDate = new Date(startTimeISO);
+      const input = duration.trim().toLowerCase();
+      const hourMatch = input.match(/(\d+(?:\.\d+)?)\s*(?:hour|hr)/);
+      const minMatch = input.match(/(\d+)\s*(?:minute|min)/);
+      if (hourMatch) {
+        const hours = parseFloat(hourMatch[1]);
+        startDate.setHours(
+          startDate.getHours() + hours,
+          startDate.getMinutes(),
+          startDate.getSeconds(),
+          startDate.getMilliseconds(),
+        );
+        endTimeISO = startDate.toISOString();
+      } else if (minMatch) {
+        startDate.setMinutes(
+          startDate.getMinutes() + parseInt(minMatch[1], 10),
+          startDate.getSeconds(),
+          startDate.getMilliseconds(),
+        );
+        endTimeISO = startDate.toISOString();
+      } else {
+        const endDate = new Date(startTimeISO);
+        endDate.setHours(endDate.getHours() + 1);
+        endTimeISO = endDate.toISOString();
+      }
+    } else {
+      const endDate = new Date(startTimeISO);
+      endDate.setHours(endDate.getHours() + 1);
+      endTimeISO = endDate.toISOString();
+    }
+    const finalMaxParticipants = maxParticipants.trim()
+      ? parseInt(maxParticipants.trim(), 10)
+      : 10;
+    onUpdate(activity.id, {
+      name: title.trim(),
+      type: activityType,
+      startTime: startTimeISO,
+      endTime: endTimeISO,
+      location: location.trim() || undefined,
+      maxParticipants: finalMaxParticipants,
+      organizerId: activity.organizerId,
+      requiresApproval: requiresApproval,
+    });
+    setIsEditMode(false);
+  }, [
+    activity,
+    onUpdate,
+    title,
+    startTime,
+    location,
+    dateError,
+    parsedDate,
+    duration,
+    activityType,
+    maxParticipants,
+    requiresApproval,
+  ]);
+
   const handleJoin = useCallback(() => {
     if (activity && onJoin) {
       onJoin(activity.id);
@@ -422,6 +508,16 @@ export default function CreateActivityBottomSheet({
       onLeave(activity.id);
     }
   }, [activity, onLeave]);
+
+  const handleEditPress = useCallback(() => {
+    setIsEditMode(true);
+  }, []);
+
+  const handleDeletePress = useCallback(() => {
+    if (activity && onDelete) {
+      onDelete(activity.id);
+    }
+  }, [activity, onDelete]);
 
   const handleAddComment = useCallback(() => {
     if (activity && onAddComment && commentText.trim()) {
@@ -437,6 +533,8 @@ export default function CreateActivityBottomSheet({
     !dateError &&
     parsedDate !== null;
   const isCreateMode = activity === null;
+  const showForm = isCreateMode || isEditMode;
+  const userRole = activity ? getActivityUserRole(activity) : null;
   const sheetIndex = activity !== undefined ? 0 : -1; // Open if activity is set (null or object)
 
   return (
@@ -461,7 +559,11 @@ export default function CreateActivityBottomSheet({
       >
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text }]}>
-            {isCreateMode ? "Create new activity" : activity?.name}
+            {isCreateMode
+              ? "Create new activity"
+              : isEditMode
+                ? "Edit activity"
+                : activity?.name}
           </Text>
           {isCreateMode && (
             <TouchableOpacity
@@ -493,8 +595,8 @@ export default function CreateActivityBottomSheet({
             <FontAwesome name="times" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
-        {isCreateMode ? (
-          // CREATE MODE: Show form
+        {showForm ? (
+          // CREATE OR EDIT MODE: Show form
           <>
             <View style={styles.section}>
               <Text style={[styles.label, { color: colors.text }]}>Title</Text>
@@ -574,7 +676,7 @@ export default function CreateActivityBottomSheet({
               />
             </View>
 
-            {isProMode && (
+            {(isProMode || isEditMode) && (
               <>
                 <View style={styles.section}>
                   <Text style={[styles.label, { color: colors.text }]}>
@@ -689,20 +791,34 @@ export default function CreateActivityBottomSheet({
               </Text>
             </View>
 
+            {isEditMode && (
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: "#888" }]}
+                onPress={() => setIsEditMode(false)}
+              >
+                <Text style={styles.actionButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[
                 styles.createButton,
                 { backgroundColor: canSubmit ? colors.tint : "#ccc" },
               ]}
-              onPress={handleCreate}
+              onPress={isCreateMode ? handleCreate : handleUpdate}
               disabled={!canSubmit}
             >
-              <FontAwesome name="plus-circle" size={18} color="#fff" />
-              <Text style={styles.createButtonText}>Create activity</Text>
+              <FontAwesome
+                name={isCreateMode ? "plus-circle" : "save"}
+                size={18}
+                color="#fff"
+              />
+              <Text style={styles.createButtonText}>
+                {isCreateMode ? "Create activity" : "Save"}
+              </Text>
             </TouchableOpacity>
           </>
         ) : (
-          // VIEW/EDIT MODE: Show activity details
+          // VIEW MODE: Show activity details and role-based actions
           <>
             <View style={styles.detailSection}>
               <View style={styles.detailRow}>
@@ -751,7 +867,25 @@ export default function CreateActivityBottomSheet({
               </View>
             </View>
 
-            {activity && isUserParticipant(activity, undefined) ? (
+            {userRole === "organizer" && onEdit && onDelete && (
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[styles.actionButton, { backgroundColor: "#666" }]}
+                  onPress={handleEditPress}
+                >
+                  <FontAwesome name="pencil" size={18} color="#fff" />
+                  <Text style={styles.actionButtonText}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, { backgroundColor: "#ff6b6b" }]}
+                  onPress={handleDeletePress}
+                >
+                  <FontAwesome name="trash" size={18} color="#fff" />
+                  <Text style={styles.actionButtonText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {userRole === "participant" && (
               <TouchableOpacity
                 style={[styles.actionButton, { backgroundColor: "#ff6b6b" }]}
                 onPress={handleLeave}
@@ -759,7 +893,19 @@ export default function CreateActivityBottomSheet({
                 <FontAwesome name="sign-out" size={18} color="#fff" />
                 <Text style={styles.actionButtonText}>Leave activity</Text>
               </TouchableOpacity>
-            ) : (
+            )}
+            {userRole === "requester" && (
+              <View
+                style={[
+                  styles.actionButton,
+                  { backgroundColor: "#888", opacity: 0.9 },
+                ]}
+              >
+                <FontAwesome name="clock-o" size={18} color="#fff" />
+                <Text style={styles.actionButtonText}>Requested</Text>
+              </View>
+            )}
+            {userRole === "watcher" && onJoin && (
               <TouchableOpacity
                 style={[styles.actionButton, { backgroundColor: colors.tint }]}
                 onPress={handleJoin}
@@ -981,6 +1127,10 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 15,
     lineHeight: 22,
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 12,
   },
   actionButton: {
     flexDirection: "row",

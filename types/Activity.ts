@@ -109,6 +109,21 @@ export function getMyParticipationStatus(
   return null;
 }
 
+/** User role for activity actions: organizer | participant | requester | watcher. */
+export type ActivityUserRole =
+  | "organizer"
+  | "participant"
+  | "requester"
+  | "watcher";
+
+export function getActivityUserRole(activity: Activity): ActivityUserRole {
+  const status = getMyParticipationStatus(activity);
+  if (status === "organizer") return "organizer";
+  if (status === "participant") return "participant";
+  if (status === "requesting") return "requester";
+  return "watcher";
+}
+
 export function getParticipantCount(activity: Activity): number {
   return activity.participants?.length || 0;
 }

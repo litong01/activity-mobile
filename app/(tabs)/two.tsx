@@ -36,13 +36,17 @@ const ACTIVITY_PAGE_SIZE = 10;
 export default function TabTwoScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
-  const { openCreate } = useLocalSearchParams<{ openCreate?: string }>();
+  const { openCreate, editActivityId } = useLocalSearchParams<{
+    openCreate?: string;
+    editActivityId?: string;
+  }>();
   const router = useRouter();
 
   const [activities, setActivities] = useState<Activity[]>([]);
   const [selectedActivity, setSelectedActivity] = useState<
     Activity | null | undefined
   >(undefined);
+  const [openingInEditMode, setOpeningInEditMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -51,6 +55,7 @@ export default function TabTwoScreen() {
   const [hasMorePast, setHasMorePast] = useState(true);
   const [hasMoreFuture, setHasMoreFuture] = useState(true);
   const pastLoadTriggered = useRef(false);
+  const initialLoadDone = useRef(false);
 
   // Load activities on mount
   useEffect(() => {
@@ -61,10 +66,42 @@ export default function TabTwoScreen() {
   useEffect(() => {
     if (openCreate === "1") {
       setSelectedActivity(null); // null = create mode
-      // Clear the param so it doesn't reopen on revisit
+      setOpeningInEditMode(false);
       router.setParams({ openCreate: undefined });
     }
   }, [openCreate, router]);
+
+  // When navigated with ?editActivityId=xxx (e.g. from tab 1), fetch activity and open in edit mode
+  useEffect(() => {
+    if (editActivityId) {
+      apiService
+        .getActivity(editActivityId)
+        .then((activity) => {
+          setSelectedActivity(activity);
+          setOpeningInEditMode(true);
+        })
+        .catch((err) => {
+          console.error("Failed to load activity for edit:", err);
+          Alert.alert("Error", "Could not load activity to edit.");
+        });
+      router.setParams({ editActivityId: undefined });
+    }
+  }, [editActivityId, router]);
+
+  /**
+   * Filter to activities that start at or after now (exclude past on initial/refresh).
+   * Uses a single "now" captured when processing the response; supports startTime or start_time.
+   */
+  const filterFutureOnly = (data: Activity[]) => {
+    const nowMs = Date.now();
+    return data.filter((a) => {
+      const raw = a.startTime ?? (a as { start_time?: string }).start_time;
+      if (!raw) return false;
+      const ms = new Date(raw).getTime();
+      if (Number.isNaN(ms)) return false;
+      return ms >= nowMs;
+    });
+  };
 
   /**
    * Load initial window: future activities from now (PAGE_SIZE), sorted ascending.
@@ -78,7 +115,8 @@ export default function TabTwoScreen() {
         startTimeFrom: new Date().toISOString(),
         limit: ACTIVITY_PAGE_SIZE,
       });
-      const sorted = [...data].sort(
+      const futureOnly = filterFutureOnly(data);
+      const sorted = [...futureOnly].sort(
         (a, b) =>
           (a.startTime ? new Date(a.startTime).getTime() : 0) -
           (b.startTime ? new Date(b.startTime).getTime() : 0),
@@ -94,6 +132,7 @@ export default function TabTwoScreen() {
     } finally {
       setIsLoading(false);
       pastLoadTriggered.current = false;
+      initialLoadDone.current = true;
     }
   }, []);
 
@@ -109,7 +148,8 @@ export default function TabTwoScreen() {
         startTimeFrom: new Date().toISOString(),
         limit: ACTIVITY_PAGE_SIZE,
       });
-      const sorted = [...data].sort(
+      const futureOnly = filterFutureOnly(data);
+      const sorted = [...futureOnly].sort(
         (a, b) =>
           (a.startTime ? new Date(a.startTime).getTime() : 0) -
           (b.startTime ? new Date(b.startTime).getTime() : 0),
@@ -126,15 +166,25 @@ export default function TabTwoScreen() {
    * Load more past activities (scroll up).
    */
   const loadMorePast = useCallback(async () => {
+    if (!initialLoadDone.current) return;
     if (loadingMorePast || !hasMorePast || activities.length === 0) return;
     const firstStart = activities[0].startTime;
     if (!firstStart) return;
     setLoadingMorePast(true);
     try {
+      const startTimeFrom = new Date(0).toISOString();
       const data = await apiService.getMyActivities({
+        startTimeFrom,
         startTimeTo: firstStart,
         limit: ACTIVITY_PAGE_SIZE,
       });
+      console.log(
+        "[Load past My] request startTimeTo=",
+        firstStart,
+        "received",
+        data?.length ?? 0,
+        "activities",
+      );
       const existingIds = new Set(activities.map((a) => a.id));
       const past = data.filter(
         (a) =>
@@ -192,26 +242,29 @@ export default function TabTwoScreen() {
       console.error("Failed to load future activities:", error);
     } finally {
       setLoadingMoreFuture(false);
+      pastLoadTriggered.current = false;
     }
   }, [activities, hasMoreFuture, loadingMoreFuture]);
 
+  // Drag up → scroll to top → load more future. Drag down → scroll to bottom → load more past.
   const lastScrollY = useRef(0);
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (!initialLoadDone.current) return;
       const y = e.nativeEvent.contentOffset.y;
-      const crossedIntoTop = lastScrollY.current >= 80 && y < 80;
+      const crossedIntoTop = lastScrollY.current >= 60 && y < 60;
       lastScrollY.current = y;
       if (
         crossedIntoTop &&
-        hasMorePast &&
-        !loadingMorePast &&
+        hasMoreFuture &&
+        !loadingMoreFuture &&
         !pastLoadTriggered.current
       ) {
         pastLoadTriggered.current = true;
-        loadMorePast();
+        loadMoreFuture();
       }
     },
-    [hasMorePast, loadMorePast, loadingMorePast],
+    [hasMoreFuture, loadMoreFuture, loadingMoreFuture],
   );
 
   // Filter by search only; full list (past + future). Sort by start time ascending.
@@ -299,6 +352,51 @@ export default function TabTwoScreen() {
     }
   };
 
+  const handleDelete = async (activityId: string) => {
+    try {
+      await apiService.deleteActivity(activityId);
+      setActivities((prev) => prev.filter((a) => a.id !== activityId));
+      setSelectedActivity(undefined);
+      setOpeningInEditMode(false);
+    } catch (error) {
+      console.error("Failed to delete activity:", error);
+      Alert.alert("Error", "Failed to delete activity. Please try again.");
+    }
+  };
+
+  const handleUpdate = async (
+    activityId: string,
+    form: {
+      name: string;
+      type: string;
+      startTime: string;
+      endTime?: string;
+      location?: string;
+      maxParticipants?: number;
+      organizerId: string;
+      requiresApproval?: boolean;
+    },
+  ) => {
+    try {
+      const updated = await apiService.updateActivity(activityId, {
+        name: form.name,
+        type: form.type,
+        startTime: form.startTime,
+        endTime: form.endTime ?? null,
+        location: form.location ?? null,
+        maxParticipants: form.maxParticipants ?? null,
+      });
+      setActivities((prev) =>
+        prev.map((a) => (a.id === activityId ? updated : a)),
+      );
+      setSelectedActivity(updated);
+      setOpeningInEditMode(false);
+    } catch (error) {
+      console.error("Failed to update activity:", error);
+      Alert.alert("Error", "Failed to update activity. Please try again.");
+    }
+  };
+
   const renderHeader = () => (
     <View style={styles.header}>
       <TextInput
@@ -346,15 +444,15 @@ export default function TabTwoScreen() {
   };
 
   const listFooter = useCallback(() => {
-    if (!loadingMoreFuture && !hasMoreFuture) return null;
+    if (!loadingMorePast && !hasMorePast) return null;
     return (
       <View style={styles.loadMoreFooter}>
-        {loadingMoreFuture && (
+        {loadingMorePast && (
           <ActivityIndicator size="small" color={colors.tint} />
         )}
       </View>
     );
-  }, [loadingMoreFuture, hasMoreFuture, colors.tint]);
+  }, [loadingMorePast, hasMorePast, colors.tint]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -364,7 +462,7 @@ export default function TabTwoScreen() {
         keyExtractor={(item) => item.id}
         ListHeaderComponent={
           <View>
-            {loadingMorePast && (
+            {loadingMoreFuture && (
               <View style={styles.loadMoreHeader}>
                 <ActivityIndicator size="small" color={colors.tint} />
               </View>
@@ -380,7 +478,7 @@ export default function TabTwoScreen() {
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={200}
-        onEndReached={loadMoreFuture}
+        onEndReached={loadMorePast}
         onEndReachedThreshold={0.3}
         maintainVisibleContentPosition={{
           minIndexForVisible: 0,
@@ -397,11 +495,17 @@ export default function TabTwoScreen() {
       />
       <CreateActivityBottomSheet
         activity={selectedActivity}
-        onClose={handleCloseBottomSheet}
+        onClose={() => {
+          handleCloseBottomSheet();
+          setOpeningInEditMode(false);
+        }}
         onCreate={handleCreateActivity}
         onJoin={handleJoin}
         onLeave={handleLeave}
         onAddComment={handleAddComment}
+        onDelete={handleDelete}
+        onUpdate={handleUpdate}
+        initialEditMode={openingInEditMode}
       />
     </View>
   );

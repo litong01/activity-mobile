@@ -172,6 +172,35 @@ class ApiService {
     });
   }
 
+  async updateActivity(
+    activityId: string,
+    data: Partial<{
+      name: string;
+      type: string;
+      location: string | null;
+      startTime: string;
+      endTime: string | null;
+      maxParticipants: number | null;
+      state: "active" | "cancelled" | "completed";
+      ruleId: string | null;
+    }>,
+  ): Promise<Activity> {
+    const response = await this.fetch<Activity>(
+      `/activities/${activityId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      },
+    );
+    return response;
+  }
+
+  async deleteActivity(activityId: string): Promise<void> {
+    await this.fetch<void>(`/activities/${activityId}`, {
+      method: "DELETE",
+    });
+  }
+
   async createActivity(data: {
     name: string;
     type: string;

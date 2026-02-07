@@ -4,6 +4,7 @@ import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { apiService } from "@/services/api.service";
 import { Activity, getActivityOrganizerName } from "@/types/Activity";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -142,11 +143,28 @@ export default function TabOneScreen() {
   const [hasMorePast, setHasMorePast] = useState(true);
   const [hasMoreFuture, setHasMoreFuture] = useState(true);
   const pastLoadTriggered = useRef(false);
+  /** Prevent onEndReached/scroll from firing load-more until initial load is done (avoids past prepended on first paint). */
+  const initialLoadDone = useRef(false);
 
   // Load activities on mount
   useEffect(() => {
     loadActivities();
   }, []);
+
+  /**
+   * Filter to activities that start at or after now (exclude past on initial/refresh).
+   * Uses a single "now" captured when processing the response; supports startTime or start_time.
+   */
+  const filterFutureOnly = (data: Activity[]) => {
+    const nowMs = Date.now();
+    return data.filter((a) => {
+      const raw = a.startTime ?? (a as { start_time?: string }).start_time;
+      if (!raw) return false;
+      const ms = new Date(raw).getTime();
+      if (Number.isNaN(ms)) return false;
+      return ms >= nowMs;
+    });
+  };
 
   /**
    * Load initial window: future activities from now (PAGE_SIZE), sorted ascending.
@@ -160,7 +178,8 @@ export default function TabOneScreen() {
         startTimeFrom: new Date().toISOString(),
         limit: ACTIVITY_PAGE_SIZE,
       });
-      const sorted = [...data].sort(
+      const futureOnly = filterFutureOnly(data);
+      const sorted = [...futureOnly].sort(
         (a, b) =>
           (a.startTime ? new Date(a.startTime).getTime() : 0) -
           (b.startTime ? new Date(b.startTime).getTime() : 0),
@@ -177,6 +196,7 @@ export default function TabOneScreen() {
     } finally {
       setIsLoading(false);
       pastLoadTriggered.current = false;
+      initialLoadDone.current = true;
     }
   }, []);
 
@@ -192,7 +212,8 @@ export default function TabOneScreen() {
         startTimeFrom: new Date().toISOString(),
         limit: ACTIVITY_PAGE_SIZE,
       });
-      const sorted = [...data].sort(
+      const futureOnly = filterFutureOnly(data);
+      const sorted = [...futureOnly].sort(
         (a, b) =>
           (a.startTime ? new Date(a.startTime).getTime() : 0) -
           (b.startTime ? new Date(b.startTime).getTime() : 0),
@@ -209,15 +230,27 @@ export default function TabOneScreen() {
    * Load more past activities (scroll up). Fetches PAGE_SIZE activities with startTime < first.
    */
   const loadMorePast = useCallback(async () => {
+    if (!initialLoadDone.current) return;
     if (loadingMorePast || !hasMorePast || activities.length === 0) return;
     const firstStart = activities[0].startTime;
     if (!firstStart) return;
     setLoadingMorePast(true);
     try {
+      // Explicit range: from long ago until (before) first visible activity.
+      // Some backends require both startTimeFrom and startTimeTo to return past activities.
+      const startTimeFrom = new Date(0).toISOString(); // epoch, or use e.g. 1 year ago
       const data = await apiService.getActivities({
+        startTimeFrom,
         startTimeTo: firstStart,
         limit: ACTIVITY_PAGE_SIZE,
       });
+      console.log(
+        "[Load past] request startTimeTo=",
+        firstStart,
+        "received",
+        data?.length ?? 0,
+        "activities",
+      );
       const existingIds = new Set(activities.map((a) => a.id));
       const past = data.filter(
         (a) =>
@@ -275,26 +308,29 @@ export default function TabOneScreen() {
       console.error("Failed to load future activities:", error);
     } finally {
       setLoadingMoreFuture(false);
+      pastLoadTriggered.current = false;
     }
   }, [activities, hasMoreFuture, loadingMoreFuture]);
 
+  // Drag up → scroll to top → load more future. Drag down → scroll to bottom → load more past.
   const lastScrollY = useRef(0);
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (!initialLoadDone.current) return;
       const y = e.nativeEvent.contentOffset.y;
-      const crossedIntoTop = lastScrollY.current >= 80 && y < 80;
+      const crossedIntoTop = lastScrollY.current >= 60 && y < 60;
       lastScrollY.current = y;
       if (
         crossedIntoTop &&
-        hasMorePast &&
-        !loadingMorePast &&
+        hasMoreFuture &&
+        !loadingMoreFuture &&
         !pastLoadTriggered.current
       ) {
         pastLoadTriggered.current = true;
-        loadMorePast();
+        loadMoreFuture();
       }
     },
-    [hasMorePast, loadMorePast, loadingMorePast],
+    [hasMoreFuture, loadMoreFuture, loadingMoreFuture],
   );
 
   // Filter by search only; keep full list (past + future). Sort by start time ascending.
@@ -394,6 +430,24 @@ export default function TabOneScreen() {
     }
   };
 
+  const router = useRouter();
+
+  const handleDelete = async (activityId: string) => {
+    try {
+      await apiService.deleteActivity(activityId);
+      setActivities((prev) => prev.filter((a) => a.id !== activityId));
+      setSelectedActivity(null);
+    } catch (error) {
+      console.error("Failed to delete activity:", error);
+      Alert.alert("Error", "Failed to delete activity. Please try again.");
+    }
+  };
+
+  const handleEdit = (activityId: string) => {
+    setSelectedActivity(null);
+    router.push(`/two?editActivityId=${activityId}`);
+  };
+
   const handleAddComment = async (activityId: string, commentText: string) => {
     try {
       const newComment = await apiService.addComment(activityId, commentText);
@@ -478,15 +532,15 @@ export default function TabOneScreen() {
   };
 
   const listFooter = useCallback(() => {
-    if (!loadingMoreFuture && !hasMoreFuture) return null;
+    if (!loadingMorePast && !hasMorePast) return null;
     return (
       <View style={styles.loadMoreFooter}>
-        {loadingMoreFuture && (
+        {loadingMorePast && (
           <ActivityIndicator size="small" color={colors.tint} />
         )}
       </View>
     );
-  }, [loadingMoreFuture, hasMoreFuture, colors.tint]);
+  }, [loadingMorePast, hasMorePast, colors.tint]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -496,7 +550,7 @@ export default function TabOneScreen() {
         keyExtractor={(item) => item.id}
         ListHeaderComponent={
           <View>
-            {loadingMorePast && (
+            {loadingMoreFuture && (
               <View style={styles.loadMoreHeader}>
                 <ActivityIndicator size="small" color={colors.tint} />
               </View>
@@ -512,7 +566,7 @@ export default function TabOneScreen() {
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={200}
-        onEndReached={loadMoreFuture}
+        onEndReached={loadMorePast}
         onEndReachedThreshold={0.3}
         maintainVisibleContentPosition={{
           minIndexForVisible: 0,
@@ -533,6 +587,8 @@ export default function TabOneScreen() {
         onJoin={handleJoin}
         onLeave={handleLeave}
         onAddComment={handleAddComment}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
       />
     </View>
   );

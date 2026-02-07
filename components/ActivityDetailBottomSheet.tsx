@@ -4,6 +4,7 @@ import {
     Activity,
     formatActivityTime,
     getActivityOrganizerName,
+    getActivityUserRole,
     getParticipantCount,
     isUserParticipant,
 } from "@/types/Activity";
@@ -27,6 +28,8 @@ interface ActivityDetailBottomSheetProps {
   onJoin: (activityId: string) => void;
   onLeave: (activityId: string) => void;
   onAddComment: (activityId: string, comment: string) => void;
+  onEdit?: (activityId: string) => void;
+  onDelete?: (activityId: string) => void;
 }
 
 export default function ActivityDetailBottomSheet({
@@ -35,6 +38,8 @@ export default function ActivityDetailBottomSheet({
   onJoin,
   onLeave,
   onAddComment,
+  onEdit,
+  onDelete,
 }: ActivityDetailBottomSheetProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
@@ -76,6 +81,20 @@ export default function ActivityDetailBottomSheet({
       onLeave(activity.id);
     }
   };
+
+  const handleEdit = () => {
+    if (activity && onEdit) {
+      onEdit(activity.id);
+    }
+  };
+
+  const handleDelete = () => {
+    if (activity && onDelete) {
+      onDelete(activity.id);
+    }
+  };
+
+  const userRole = activity ? getActivityUserRole(activity) : null;
 
   React.useEffect(() => {
     if (activity) {
@@ -165,9 +184,27 @@ export default function ActivityDetailBottomSheet({
             </View>
           </View>
 
-          {/* Action Buttons */}
+          {/* Action Buttons (by role) */}
           <View style={styles.section}>
-            {isUserParticipant(activity, undefined) ? (
+            {userRole === "organizer" && onEdit && onDelete && (
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[styles.button, styles.editButton]}
+                  onPress={handleEdit}
+                >
+                  <FontAwesome name="pencil" size={18} color="#fff" />
+                  <Text style={styles.buttonText}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.button, styles.leaveButton]}
+                  onPress={handleDelete}
+                >
+                  <FontAwesome name="trash" size={18} color="#fff" />
+                  <Text style={styles.buttonText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {userRole === "participant" && (
               <TouchableOpacity
                 style={[styles.button, styles.leaveButton]}
                 onPress={handleLeave}
@@ -175,7 +212,19 @@ export default function ActivityDetailBottomSheet({
                 <FontAwesome name="sign-out" size={18} color="#fff" />
                 <Text style={styles.buttonText}>Leave Activity</Text>
               </TouchableOpacity>
-            ) : (
+            )}
+            {userRole === "requester" && (
+              <View
+                style={[
+                  styles.button,
+                  { backgroundColor: "#888", opacity: 0.9 },
+                ]}
+              >
+                <FontAwesome name="clock-o" size={18} color="#fff" />
+                <Text style={styles.buttonText}>Requested</Text>
+              </View>
+            )}
+            {userRole === "watcher" && (
               <TouchableOpacity
                 style={[styles.button, { backgroundColor: colors.tint }]}
                 onPress={handleJoin}
@@ -332,6 +381,10 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     flex: 1,
   },
+  actionRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
   button: {
     flexDirection: "row",
     alignItems: "center",
@@ -340,6 +393,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 12,
     gap: 8,
+  },
+  editButton: {
+    backgroundColor: "#666",
   },
   leaveButton: {
     backgroundColor: "#ff4444",
