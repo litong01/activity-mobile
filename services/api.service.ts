@@ -82,25 +82,43 @@ class ApiService {
   }
 
   /**
-   * Activities API
+   * Activities API (paginated; matches GET /activities in OpenAPI).
+   * Response: { data: Activity[], meta: PaginationMeta }.
    */
   async getActivities(filters?: {
-    search?: string;
-    type?: string;
+    page?: number;
     limit?: number;
-    offset?: number;
+    type?: string;
+    location?: string;
+    startTimeFrom?: string;
+    startTimeTo?: string;
+    organizerId?: string;
+    available?: boolean;
   }): Promise<Activity[]> {
     const params = new URLSearchParams();
-    if (filters?.search) params.append("search", filters.search);
+    if (filters?.page != null)
+      params.append("page", String(filters.page));
+    if (filters?.limit != null)
+      params.append("limit", String(filters.limit));
     if (filters?.type) params.append("type", filters.type);
-    if (filters?.limit) params.append("limit", filters.limit.toString());
-    if (filters?.offset) params.append("offset", filters.offset.toString());
+    if (filters?.location) params.append("location", filters.location);
+    if (filters?.startTimeFrom)
+      params.append("startTimeFrom", filters.startTimeFrom);
+    if (filters?.startTimeTo)
+      params.append("startTimeTo", filters.startTimeTo);
+    if (filters?.organizerId)
+      params.append("organizerId", filters.organizerId);
+    if (filters?.available !== undefined)
+      params.append("available", String(filters.available));
 
     const query = params.toString();
     const endpoint = `/activities${query ? `?${query}` : ""}`;
 
-    const response = await this.fetch<ApiResponse<Activity[]>>(endpoint);
-    return response.data || [];
+    const response = await this.fetch<
+      Activity[] | { data?: Activity[]; meta?: unknown }
+    >(endpoint);
+    if (Array.isArray(response)) return response;
+    return response.data ?? [];
   }
 
   async getActivity(id: string): Promise<Activity> {
@@ -115,26 +133,33 @@ class ApiService {
 
   /**
    * Get activities for the current user (organizer, participant, or requesting).
-   * Uses GET /users/{id}/activities. Returns [] if not authenticated.
+   * Uses GET /users/{id}/activities (paginated; matches OpenAPI). Returns [] if not authenticated.
+   * Response: { data: Activity[], meta: PaginationMeta }.
    */
   async getMyActivities(filters?: {
+    page?: number;
+    limit?: number;
     startTimeFrom?: string;
     startTimeTo?: string;
   }): Promise<Activity[]> {
     const user = authService.getUser();
     if (!user?.id) return [];
     const params = new URLSearchParams();
+    if (filters?.page != null)
+      params.append("page", String(filters.page));
+    if (filters?.limit != null)
+      params.append("limit", String(filters.limit));
     if (filters?.startTimeFrom)
       params.append("startTimeFrom", filters.startTimeFrom);
     if (filters?.startTimeTo)
       params.append("startTimeTo", filters.startTimeTo);
     const query = params.toString();
     const endpoint = `/users/${user.id}/activities${query ? `?${query}` : ""}`;
-    const response = await this.fetch<Activity[] | ApiResponse<Activity[]>>(
-      endpoint,
-    );
+    const response = await this.fetch<
+      Activity[] | { data?: Activity[]; meta?: unknown }
+    >(endpoint);
     if (Array.isArray(response)) return response;
-    return response?.data ?? [];
+    return response.data ?? [];
   }
 
   async joinActivity(activityId: string): Promise<void> {

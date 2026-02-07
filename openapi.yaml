@@ -226,7 +226,7 @@ paths:
       tags:
         - participants
       summary: Get activity participants
-      description: Retrieve list of participants for a specific activity
+      description: Retrieve a paginated list of participants for a specific activity
       parameters:
         - name: id
           in: path
@@ -235,15 +235,35 @@ paths:
           schema:
             type: string
             example: cm5xyz789abc123
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
       responses:
         '200':
-          description: List of participants
+          description: Paginated list of participants
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Participant'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Participant'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
         '404':
           description: Activity not found
           content:
@@ -481,7 +501,7 @@ paths:
       tags:
         - users
       summary: Get user's activities
-      description: Retrieve all activities that a user is participating in
+      description: Retrieve a paginated list of activities that a user is participating in
       parameters:
         - name: id
           in: path
@@ -490,6 +510,21 @@ paths:
           schema:
             type: string
             example: cm5abc123def456
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
         - name: startTimeFrom
           in: query
           description: Filter activities starting from this time (ISO 8601)
@@ -506,13 +541,18 @@ paths:
             example: "2026-01-30T18:00:00Z"
       responses:
         '200':
-          description: List of user's activities
+          description: Paginated list of user's activities
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Activity'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Activity'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
         '404':
           description: User not found
           content:
@@ -525,7 +565,7 @@ paths:
       tags:
         - users
       summary: Get activity suggestions for user
-      description: Retrieve personalized activity suggestions for a user based on their preferences and participation history
+      description: Retrieve paginated personalized activity suggestions for a user based on their preferences and participation history
       parameters:
         - name: id
           in: path
@@ -534,9 +574,16 @@ paths:
           schema:
             type: string
             example: cm5abc123def456
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
         - name: limit
           in: query
-          description: Maximum number of suggestions to return
+          description: Number of suggestions per page
           schema:
             type: integer
             minimum: 1
@@ -544,13 +591,18 @@ paths:
             default: 10
       responses:
         '200':
-          description: List of suggested activities
+          description: Paginated list of suggested activities
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Activity'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScoredActivity'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
         '404':
           description: User not found
           content:
@@ -563,16 +615,37 @@ paths:
       tags:
         - recurrence-rules
       summary: Get all recurrence rules
-      description: Retrieve all recurrence rules with activity counts
+      description: Retrieve a paginated list of recurrence rules with activity counts
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
       responses:
         '200':
-          description: List of recurrence rules
+          description: Paginated list of recurrence rules
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/RecurrenceRule'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RecurrenceRule'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
     
     post:
       tags:
@@ -661,7 +734,7 @@ paths:
       tags:
         - recurrence-rules
       summary: Get activities created from rule
-      description: Retrieve all activities generated from a specific recurrence rule
+      description: Retrieve a paginated list of activities generated from a specific recurrence rule
       parameters:
         - name: id
           in: path
@@ -670,17 +743,196 @@ paths:
           schema:
             type: string
             example: cm5rule123abc456
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
       responses:
         '200':
-          description: List of activities
+          description: Paginated list of activities
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Activity'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Activity'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
         '404':
           description: Recurrence rule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /activities/{id}/join-requests:
+    get:
+      tags:
+        - participants
+      summary: Get join requests for an activity
+      description: Retrieve a paginated list of join requests for a specific activity, optionally filtered by status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Activity ID
+          schema:
+            type: string
+            example: cm5xyz789abc123
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: status
+          in: query
+          description: Filter by join request status
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED]
+            example: PENDING
+      responses:
+        '200':
+          description: Paginated list of join requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JoinRequest'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '404':
+          description: Activity not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - participants
+      summary: Request to join an activity
+      description: |
+        Request to join an activity. If the activity does not require approval, the user is
+        added directly as a participant. If approval is required, a join request with PENDING
+        status is created for the organizer to review.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Activity ID
+          schema:
+            type: string
+            example: cm5xyz789abc123
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestJoinDto'
+      responses:
+        '201':
+          description: |
+            Join request created or participant added directly.
+            Returns a Participant if the activity does not require approval,
+            or a JoinRequest if approval is required.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Participant'
+                  - $ref: '#/components/schemas/JoinRequest'
+        '404':
+          description: Activity or user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: User is already a participant or has a pending/approved join request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: User's join request was previously rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /activities/join-requests/{id}:
+    patch:
+      tags:
+        - participants
+      summary: Respond to a join request
+      description: Allow the activity organizer to approve or reject a pending join request. If approved, the user is automatically added as a participant.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Join request ID
+          schema:
+            type: string
+            example: cm5jr123abc456
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/RespondJoinRequestDto'
+                - type: object
+                  required:
+                    - organizerId
+                  properties:
+                    organizerId:
+                      type: string
+                      description: ID of the organizer responding to the request
+                      example: cm5abc123def456
+      responses:
+        '200':
+          description: Join request updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinRequest'
+        '403':
+          description: Only the organizer can respond to join requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Join request not found
           content:
             application/json:
               schema:
@@ -1186,6 +1438,94 @@ components:
           enum: [participant, organizer]
           example: participant
           description: Role of the participant in the activity
+
+    RequestJoinDto:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: string
+          example: cm5abc123def456
+          description: ID of the user requesting to join
+        message:
+          type: string
+          example: "I'd love to join this activity!"
+          description: Optional message to the organizer
+
+    RespondJoinRequestDto:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [APPROVED, REJECTED]
+          example: APPROVED
+          description: Decision on the join request
+
+    ScoredActivity:
+      allOf:
+        - $ref: '#/components/schemas/Activity'
+        - type: object
+          properties:
+            score:
+              type: number
+              example: 0.85
+              description: Relevance score for the suggestion (0 to 1)
+            reason:
+              type: string
+              example: "Matches your preferred activity type"
+              description: Reason why this activity was suggested
+
+    JoinRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          example: cm5jr123abc456
+          description: Unique join request identifier
+        activityId:
+          type: string
+          example: cm5xyz789abc123
+          description: ID of the activity
+        userId:
+          type: string
+          example: cm5abc123def456
+          description: ID of the requesting user
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED]
+          example: PENDING
+          description: Current status of the join request
+        message:
+          type: string
+          nullable: true
+          example: "I'd love to join this activity!"
+          description: Optional message from the user when requesting to join
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-01-22T10:00:00Z"
+          description: Request creation timestamp
+        respondedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-01-23T14:00:00Z"
+          description: Timestamp when the organizer responded
+        user:
+          type: object
+          description: Requesting user details
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            email:
+              type: string
+            avatarUrl:
+              type: string
 
     PaginationMeta:
       type: object

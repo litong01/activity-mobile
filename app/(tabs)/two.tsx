@@ -1,27 +1,37 @@
 import ActivityItem from "@/components/ActivityItem";
 import CreateActivityBottomSheet, {
-    CreateActivityForm,
+  CreateActivityForm,
 } from "@/components/CreateActivityBottomSheet";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
 import { apiService } from "@/services/api.service";
 import {
-    Activity,
-    getActivityOrganizerName,
-    getMyParticipationStatus,
+  Activity,
+  getActivityOrganizerName,
+  getMyParticipationStatus,
 } from "@/types/Activity";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
+
+const ACTIVITY_PAGE_SIZE = 10;
 
 export default function TabTwoScreen() {
   const colorScheme = useColorScheme();
@@ -36,6 +46,11 @@ export default function TabTwoScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadingMorePast, setLoadingMorePast] = useState(false);
+  const [loadingMoreFuture, setLoadingMoreFuture] = useState(false);
+  const [hasMorePast, setHasMorePast] = useState(true);
+  const [hasMoreFuture, setHasMoreFuture] = useState(true);
+  const pastLoadTriggered = useRef(false);
 
   // Load activities on mount
   useEffect(() => {
@@ -52,13 +67,23 @@ export default function TabTwoScreen() {
   }, [openCreate, router]);
 
   /**
-   * Load "my" activities (organizer, participant, or requesting) from API
+   * Load initial window: future activities from now (PAGE_SIZE), sorted ascending.
    */
-  const loadActivities = async () => {
+  const loadActivities = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await apiService.getMyActivities();
-      setActivities(data);
+      setHasMorePast(true);
+      setHasMoreFuture(true);
+      const data = await apiService.getMyActivities({
+        startTimeFrom: new Date().toISOString(),
+        limit: ACTIVITY_PAGE_SIZE,
+      });
+      const sorted = [...data].sort(
+        (a, b) =>
+          (a.startTime ? new Date(a.startTime).getTime() : 0) -
+          (b.startTime ? new Date(b.startTime).getTime() : 0),
+      );
+      setActivities(sorted);
     } catch (error) {
       console.error("Failed to load my activities:", error);
       Alert.alert(
@@ -68,42 +93,146 @@ export default function TabTwoScreen() {
       );
     } finally {
       setIsLoading(false);
+      pastLoadTriggered.current = false;
     }
-  };
+  }, []);
 
   /**
-   * Refresh activities (pull to refresh)
+   * Refresh: reset to initial window (future from now).
    */
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     try {
       setIsRefreshing(true);
-      const data = await apiService.getMyActivities();
-      setActivities(data);
+      setHasMorePast(true);
+      setHasMoreFuture(true);
+      const data = await apiService.getMyActivities({
+        startTimeFrom: new Date().toISOString(),
+        limit: ACTIVITY_PAGE_SIZE,
+      });
+      const sorted = [...data].sort(
+        (a, b) =>
+          (a.startTime ? new Date(a.startTime).getTime() : 0) -
+          (b.startTime ? new Date(b.startTime).getTime() : 0),
+      );
+      setActivities(sorted);
     } catch (error) {
       console.error("Failed to refresh my activities:", error);
     } finally {
       setIsRefreshing(false);
     }
-  };
+  }, []);
 
-  // getMyActivities() already returns only the user's activities (organizer, participant, requesting)
-  const myActivities = activities;
-
-  // Filter activities based on search query
-  const filteredActivities = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return myActivities;
+  /**
+   * Load more past activities (scroll up).
+   */
+  const loadMorePast = useCallback(async () => {
+    if (loadingMorePast || !hasMorePast || activities.length === 0) return;
+    const firstStart = activities[0].startTime;
+    if (!firstStart) return;
+    setLoadingMorePast(true);
+    try {
+      const data = await apiService.getMyActivities({
+        startTimeTo: firstStart,
+        limit: ACTIVITY_PAGE_SIZE,
+      });
+      const existingIds = new Set(activities.map((a) => a.id));
+      const past = data.filter(
+        (a) =>
+          a.startTime &&
+          a.startTime < firstStart &&
+          !existingIds.has(a.id),
+      );
+      const sorted = [...past].sort(
+        (a, b) =>
+          (a.startTime ? new Date(a.startTime).getTime() : 0) -
+          (b.startTime ? new Date(b.startTime).getTime() : 0),
+      );
+      if (sorted.length < ACTIVITY_PAGE_SIZE) setHasMorePast(false);
+      setActivities((prev) => [...sorted, ...prev]);
+    } catch (error) {
+      console.error("Failed to load past activities:", error);
+    } finally {
+      setLoadingMorePast(false);
+      pastLoadTriggered.current = false;
     }
+  }, [activities, hasMorePast, loadingMorePast]);
 
-    const query = searchQuery.toLowerCase();
-    return myActivities.filter(
-      (activity) =>
-        activity.name.toLowerCase().includes(query) ||
-        activity.type.toLowerCase().includes(query) ||
-        activity.location?.toLowerCase().includes(query) ||
-        getActivityOrganizerName(activity).toLowerCase().includes(query),
+  /**
+   * Load more future activities (scroll down).
+   */
+  const loadMoreFuture = useCallback(async () => {
+    if (loadingMoreFuture || !hasMoreFuture || activities.length === 0) return;
+    const last = activities[activities.length - 1];
+    const lastStart = last.startTime;
+    if (!lastStart) return;
+    setLoadingMoreFuture(true);
+    try {
+      const data = await apiService.getMyActivities({
+        startTimeFrom: lastStart,
+        limit: ACTIVITY_PAGE_SIZE + 1,
+      });
+      const existingIds = new Set(activities.map((a) => a.id));
+      const future = data
+        .filter(
+          (a) =>
+            a.startTime &&
+            (new Date(a.startTime).getTime() > new Date(lastStart).getTime() ||
+              (a.startTime === lastStart && a.id !== last.id)) &&
+            !existingIds.has(a.id),
+        )
+        .slice(0, ACTIVITY_PAGE_SIZE);
+      const sorted = [...future].sort(
+        (a, b) =>
+          (a.startTime ? new Date(a.startTime).getTime() : 0) -
+          (b.startTime ? new Date(b.startTime).getTime() : 0),
+      );
+      if (sorted.length < ACTIVITY_PAGE_SIZE) setHasMoreFuture(false);
+      setActivities((prev) => [...prev, ...sorted]);
+    } catch (error) {
+      console.error("Failed to load future activities:", error);
+    } finally {
+      setLoadingMoreFuture(false);
+    }
+  }, [activities, hasMoreFuture, loadingMoreFuture]);
+
+  const lastScrollY = useRef(0);
+  const handleScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const y = e.nativeEvent.contentOffset.y;
+      const crossedIntoTop = lastScrollY.current >= 80 && y < 80;
+      lastScrollY.current = y;
+      if (
+        crossedIntoTop &&
+        hasMorePast &&
+        !loadingMorePast &&
+        !pastLoadTriggered.current
+      ) {
+        pastLoadTriggered.current = true;
+        loadMorePast();
+      }
+    },
+    [hasMorePast, loadMorePast, loadingMorePast],
+  );
+
+  // Filter by search only; full list (past + future). Sort by start time ascending.
+  const filteredActivities = useMemo(() => {
+    let list = activities;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      list = list.filter(
+        (activity) =>
+          activity.name.toLowerCase().includes(query) ||
+          activity.type.toLowerCase().includes(query) ||
+          activity.location?.toLowerCase().includes(query) ||
+          getActivityOrganizerName(activity).toLowerCase().includes(query),
+      );
+    }
+    return [...list].sort(
+      (a, b) =>
+        (a.startTime ? new Date(a.startTime).getTime() : 0) -
+        (b.startTime ? new Date(b.startTime).getTime() : 0),
     );
-  }, [searchQuery, myActivities]);
+  }, [searchQuery, activities]);
 
   const handleActivityPress = (activity: Activity) => {
     setSelectedActivity(activity);
@@ -216,18 +345,47 @@ export default function TabTwoScreen() {
     );
   };
 
+  const listFooter = useCallback(() => {
+    if (!loadingMoreFuture && !hasMoreFuture) return null;
+    return (
+      <View style={styles.loadMoreFooter}>
+        {loadingMoreFuture && (
+          <ActivityIndicator size="small" color={colors.tint} />
+        )}
+      </View>
+    );
+  }, [loadingMoreFuture, hasMoreFuture, colors.tint]);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <FlatList
         data={filteredActivities}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={
+          <View>
+            {loadingMorePast && (
+              <View style={styles.loadMoreHeader}>
+                <ActivityIndicator size="small" color={colors.tint} />
+              </View>
+            )}
+            {renderHeader()}
+          </View>
+        }
+        ListFooterComponent={listFooter}
         ListEmptyComponent={renderEmptyComponent}
         contentContainerStyle={
           filteredActivities.length === 0 ? styles.emptyList : undefined
         }
         showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={200}
+        onEndReached={loadMoreFuture}
+        onEndReachedThreshold={0.3}
+        maintainVisibleContentPosition={{
+          minIndexForVisible: 0,
+          autoscrollToTopThreshold: 10,
+        }}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -290,5 +448,13 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     marginTop: 16,
+  },
+  loadMoreHeader: {
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  loadMoreFooter: {
+    paddingVertical: 12,
+    alignItems: "center",
   },
 });
