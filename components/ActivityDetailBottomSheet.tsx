@@ -6,6 +6,7 @@ import {
     getActivityOrganizerName,
     getActivityUserRole,
     getParticipantCount,
+    isActivityFinished,
     isUserParticipant,
 } from "@/types/Activity";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
@@ -27,6 +28,8 @@ interface ActivityDetailBottomSheetProps {
   onClose: () => void;
   onJoin: (activityId: string) => void;
   onLeave: (activityId: string) => void;
+  onRequestToJoin?: (activityId: string) => void;
+  onCancelRequest?: (activityId: string) => void;
   onAddComment: (activityId: string, comment: string) => void;
   onEdit?: (activityId: string) => void;
   onDelete?: (activityId: string) => void;
@@ -37,6 +40,8 @@ export default function ActivityDetailBottomSheet({
   onClose,
   onJoin,
   onLeave,
+  onRequestToJoin,
+  onCancelRequest,
   onAddComment,
   onEdit,
   onDelete,
@@ -71,9 +76,15 @@ export default function ActivityDetailBottomSheet({
   };
 
   const handleJoin = () => {
-    if (activity) {
-      onJoin(activity.id);
-    }
+    if (activity) onJoin(activity.id);
+  };
+
+  const handleRequestToJoin = () => {
+    if (activity && onRequestToJoin) onRequestToJoin(activity.id);
+  };
+
+  const handleCancelRequest = () => {
+    if (activity && onCancelRequest) onCancelRequest(activity.id);
   };
 
   const handleLeave = () => {
@@ -95,6 +106,7 @@ export default function ActivityDetailBottomSheet({
   };
 
   const userRole = activity ? getActivityUserRole(activity) : null;
+  const isFinished = activity ? isActivityFinished(activity) : false;
 
   React.useEffect(() => {
     if (activity) {
@@ -184,54 +196,85 @@ export default function ActivityDetailBottomSheet({
             </View>
           </View>
 
-          {/* Action Buttons (by role) */}
+          {/* Action Buttons (by role); no actions if activity is finished or ended */}
           <View style={styles.section}>
-            {userRole === "organizer" && onEdit && onDelete && (
-              <View style={styles.actionRow}>
-                <TouchableOpacity
-                  style={[styles.button, styles.editButton]}
-                  onPress={handleEdit}
-                >
-                  <FontAwesome name="pencil" size={18} color="#fff" />
-                  <Text style={styles.buttonText}>Edit</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.button, styles.leaveButton]}
-                  onPress={handleDelete}
-                >
-                  <FontAwesome name="trash" size={18} color="#fff" />
-                  <Text style={styles.buttonText}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            {userRole === "participant" && (
-              <TouchableOpacity
-                style={[styles.button, styles.leaveButton]}
-                onPress={handleLeave}
-              >
-                <FontAwesome name="sign-out" size={18} color="#fff" />
-                <Text style={styles.buttonText}>Leave Activity</Text>
-              </TouchableOpacity>
-            )}
-            {userRole === "requester" && (
+            {isFinished ? (
               <View
                 style={[
                   styles.button,
-                  { backgroundColor: "#888", opacity: 0.9 },
+                  { backgroundColor: "#888", opacity: 0.8 },
                 ]}
               >
-                <FontAwesome name="clock-o" size={18} color="#fff" />
-                <Text style={styles.buttonText}>Requested</Text>
+                <FontAwesome name="check-circle" size={18} color="#fff" />
+                <Text style={styles.buttonText}>Activity ended</Text>
               </View>
-            )}
-            {userRole === "watcher" && (
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: colors.tint }]}
-                onPress={handleJoin}
-              >
-                <FontAwesome name="plus-circle" size={18} color="#fff" />
-                <Text style={styles.buttonText}>Request to Join</Text>
-              </TouchableOpacity>
+            ) : (
+              <>
+                {userRole === "organizer" && onEdit && onDelete && (
+                  <View style={styles.actionRow}>
+                    <TouchableOpacity
+                      style={[styles.button, styles.editButton]}
+                      onPress={handleEdit}
+                    >
+                      <FontAwesome name="pencil" size={18} color="#fff" />
+                      <Text style={styles.buttonText}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.button, styles.leaveButton]}
+                      onPress={handleDelete}
+                    >
+                      <FontAwesome name="trash" size={18} color="#fff" />
+                      <Text style={styles.buttonText}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                {userRole === "participant" && (
+                  <TouchableOpacity
+                    style={[styles.button, styles.leaveButton]}
+                    onPress={handleLeave}
+                  >
+                    <FontAwesome name="sign-out" size={18} color="#fff" />
+                    <Text style={styles.buttonText}>Leave</Text>
+                  </TouchableOpacity>
+                )}
+                {userRole === "requester" && activity.requiresApproval && (
+                  <TouchableOpacity
+                    style={[styles.button, styles.leaveButton]}
+                    onPress={handleCancelRequest}
+                  >
+                    <FontAwesome name="times-circle" size={18} color="#fff" />
+                    <Text style={styles.buttonText}>Cancel request</Text>
+                  </TouchableOpacity>
+                )}
+                {userRole === "requester" && !activity.requiresApproval && (
+                  <View
+                    style={[
+                      styles.button,
+                      { backgroundColor: "#888", opacity: 0.9 },
+                    ]}
+                  >
+                    <FontAwesome name="clock-o" size={18} color="#fff" />
+                    <Text style={styles.buttonText}>Requested</Text>
+                  </View>
+                )}
+                {userRole === "watcher" && (
+                  <TouchableOpacity
+                    style={[styles.button, { backgroundColor: colors.tint }]}
+                    onPress={
+                      activity.requiresApproval
+                        ? handleRequestToJoin
+                        : handleJoin
+                    }
+                  >
+                    <FontAwesome name="plus-circle" size={18} color="#fff" />
+                    <Text style={styles.buttonText}>
+                      {activity.requiresApproval
+                        ? "Request to join"
+                        : "Join"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
           </View>
 

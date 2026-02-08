@@ -1,9 +1,11 @@
+import ActivityDetailBottomSheet from "@/components/ActivityDetailBottomSheet";
 import ActivityItem from "@/components/ActivityItem";
 import CreateActivityBottomSheet, {
   CreateActivityForm,
 } from "@/components/CreateActivityBottomSheet";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
+import { useActivitySync } from "@/contexts/ActivitySyncContext";
 import { apiService } from "@/services/api.service";
 import {
   Activity,
@@ -47,6 +49,10 @@ export default function TabTwoScreen() {
     Activity | null | undefined
   >(undefined);
   const [openingInEditMode, setOpeningInEditMode] = useState(false);
+  /** Activity being viewed in the detail sheet (same UI as Around me tab). undefined = detail sheet closed. */
+  const [detailActivity, setDetailActivity] = useState<Activity | undefined>(
+    undefined,
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -56,6 +62,41 @@ export default function TabTwoScreen() {
   const [hasMoreFuture, setHasMoreFuture] = useState(true);
   const pastLoadTriggered = useRef(false);
   const initialLoadDone = useRef(false);
+
+  const {
+    subscribeToActivityUpdates,
+    notifyActivityUpdated,
+    subscribeToActivityDeleted,
+    notifyActivityDeleted,
+  } = useActivitySync();
+
+  // Sync cached list when an activity is updated on the other tab (no API call)
+  useEffect(() => {
+    return subscribeToActivityUpdates((activity) => {
+      setActivities((prev) =>
+        prev.some((a) => a.id === activity.id)
+          ? prev.map((a) => (a.id === activity.id ? activity : a))
+          : prev,
+      );
+      setDetailActivity((prev) =>
+        prev?.id === activity.id ? activity : prev,
+      );
+      setSelectedActivity((prev) =>
+        prev?.id === activity.id ? activity : prev,
+      );
+    });
+  }, [subscribeToActivityUpdates]);
+
+  // Sync: remove activity from list when deleted on the other tab
+  useEffect(() => {
+    return subscribeToActivityDeleted((activityId) => {
+      setActivities((prev) => prev.filter((a) => a.id !== activityId));
+      setDetailActivity((prev) => (prev?.id === activityId ? undefined : prev));
+      setSelectedActivity((prev) =>
+        prev?.id === activityId ? undefined : prev,
+      );
+    });
+  }, [subscribeToActivityDeleted]);
 
   // Load activities on mount
   useEffect(() => {
@@ -288,11 +329,16 @@ export default function TabTwoScreen() {
   }, [searchQuery, activities]);
 
   const handleActivityPress = (activity: Activity) => {
-    setSelectedActivity(activity);
+    setDetailActivity(activity);
   };
+
+  const handleCloseDetailSheet = useCallback(() => {
+    setDetailActivity(undefined);
+  }, []);
 
   const handleCloseBottomSheet = useCallback(() => {
     setSelectedActivity(undefined);
+    setOpeningInEditMode(false);
   }, []);
 
   const renderItem = ({ item }: { item: Activity }) => (
@@ -325,7 +371,11 @@ export default function TabTwoScreen() {
   const handleJoin = async (activityId: string) => {
     try {
       await apiService.joinActivity(activityId);
-      await loadActivities(); // Refresh the list to get updated participants
+      await loadActivities();
+      if (detailActivity?.id === activityId) {
+        const updated = await apiService.getActivity(activityId);
+        setDetailActivity(updated);
+      }
     } catch (error) {
       console.error("Failed to join activity:", error);
       Alert.alert("Error", "Failed to join activity. Please try again.");
@@ -335,12 +385,63 @@ export default function TabTwoScreen() {
   const handleLeave = async (activityId: string) => {
     try {
       await apiService.leaveActivity(activityId);
-      await loadActivities(); // Refresh the list to get updated participants
+      await loadActivities();
+      if (detailActivity?.id === activityId) {
+        const updated = await apiService.getActivity(activityId);
+        setDetailActivity(updated);
+      }
     } catch (error) {
       console.error("Failed to leave activity:", error);
       Alert.alert("Error", "Failed to leave activity. Please try again.");
     }
   };
+
+  const refreshDetailActivity = useCallback(
+    async (activityId: string) => {
+      try {
+        const updated = await apiService.getActivity(activityId);
+        setDetailActivity((prev) => (prev?.id === activityId ? updated : prev));
+        setActivities((prev) =>
+          prev.map((a) => (a.id === activityId ? updated : a)),
+        );
+      } catch {
+        await loadActivities();
+      }
+    },
+    [loadActivities],
+  );
+
+  const handleRequestToJoin = async (activityId: string) => {
+    try {
+      await apiService.requestToJoinActivity(activityId);
+      await refreshDetailActivity(activityId);
+    } catch (error) {
+      console.error("Failed to request to join:", error);
+      Alert.alert("Error", "Failed to request to join. Please try again.");
+    }
+  };
+
+  const handleCancelRequest = async (activityId: string) => {
+    try {
+      await apiService.cancelJoinRequest(activityId);
+      await refreshDetailActivity(activityId);
+    } catch (error) {
+      console.error("Failed to cancel request:", error);
+      Alert.alert("Error", "Failed to cancel request. Please try again.");
+    }
+  };
+
+  /** Open create sheet in edit mode for this activity; close detail sheet. */
+  const handleEditFromDetail = useCallback((activityId: string) => {
+    const activity = detailActivity?.id === activityId
+      ? detailActivity
+      : activities.find((a) => a.id === activityId);
+    setDetailActivity(undefined);
+    if (activity) {
+      setSelectedActivity(activity);
+      setOpeningInEditMode(true);
+    }
+  }, [detailActivity, activities]);
 
   const handleAddComment = async (activityId: string, comment: string) => {
     try {
@@ -358,6 +459,8 @@ export default function TabTwoScreen() {
       setActivities((prev) => prev.filter((a) => a.id !== activityId));
       setSelectedActivity(undefined);
       setOpeningInEditMode(false);
+      if (detailActivity?.id === activityId) setDetailActivity(undefined);
+      notifyActivityDeleted(activityId);
     } catch (error) {
       console.error("Failed to delete activity:", error);
       Alert.alert("Error", "Failed to delete activity. Please try again.");
@@ -391,6 +494,7 @@ export default function TabTwoScreen() {
       );
       setSelectedActivity(updated);
       setOpeningInEditMode(false);
+      notifyActivityUpdated(updated);
     } catch (error) {
       console.error("Failed to update activity:", error);
       Alert.alert("Error", "Failed to update activity. Please try again.");
@@ -493,20 +597,31 @@ export default function TabTwoScreen() {
           />
         }
       />
-      <CreateActivityBottomSheet
-        activity={selectedActivity}
-        onClose={() => {
-          handleCloseBottomSheet();
-          setOpeningInEditMode(false);
-        }}
-        onCreate={handleCreateActivity}
+      <ActivityDetailBottomSheet
+        activity={detailActivity ?? null}
+        onClose={handleCloseDetailSheet}
         onJoin={handleJoin}
         onLeave={handleLeave}
+        onRequestToJoin={handleRequestToJoin}
+        onCancelRequest={handleCancelRequest}
         onAddComment={handleAddComment}
+        onEdit={handleEditFromDetail}
         onDelete={handleDelete}
-        onUpdate={handleUpdate}
-        initialEditMode={openingInEditMode}
       />
+      {(selectedActivity === null ||
+        (selectedActivity && openingInEditMode)) && (
+        <CreateActivityBottomSheet
+          activity={selectedActivity}
+          onClose={handleCloseBottomSheet}
+          onCreate={handleCreateActivity}
+          onJoin={handleJoin}
+          onLeave={handleLeave}
+          onAddComment={handleAddComment}
+          onDelete={handleDelete}
+          onUpdate={handleUpdate}
+          initialEditMode={openingInEditMode}
+        />
+      )}
     </View>
   );
 }

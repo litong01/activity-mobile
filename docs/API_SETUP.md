@@ -128,3 +128,23 @@ When ready to use real Kinde authentication:
 2. Update the `baseUrl` in `config/app.config.ts`
 3. Test the integration with your backend
 4. When ready for production, configure Kinde and disable development mode
+
+
+## Actions allowed against an activity
+When a user click on a particular activity, we show some actionable buttons, such as edit, delete,join request,cancel request, leave the activity or no actions at all.
+
+First we define for different roles for a user against an activity
+1. Organizer - the user is the activity's organizer
+2. Participant - the user is the activity's participant
+3. Requester - the user is currently requesting to join the activity, and the organizer has not approved the the request yet
+4. Watcher - the user is neither Organizer, Participant nor Requester.
+
+These roles are only for users against activities which have not be finished. 
+
+Here are the rules for what actions are available for each role:
+1. Organizer: Edit, Delete.
+2. Participant: Leave.
+3. Requester: Cancel request if the current user's request to join is pending and the activity requires approval is true.
+4. Watcher: Join if activity requires Approval is false, Request to join if activity requires approval is true.
+
+If an activity is already finished or ended, then there is no action can be taken against.

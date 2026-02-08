@@ -124,6 +124,15 @@ export function getActivityUserRole(activity: Activity): ActivityUserRole {
   return "watcher";
 }
 
+/** True if the activity is finished or ended (no actions allowed). */
+export function isActivityFinished(activity: Activity): boolean {
+  if (activity.state === "completed" || activity.state === "cancelled")
+    return true;
+  const endOrStart = activity.endTime ?? activity.startTime;
+  if (!endOrStart) return false;
+  return new Date(endOrStart).getTime() < Date.now();
+}
+
 export function getParticipantCount(activity: Activity): number {
   return activity.participants?.length || 0;
 }

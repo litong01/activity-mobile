@@ -114,7 +114,17 @@ export default function CreateActivityBottomSheet({
     if (activity) {
       setTitle(activity.name);
       setActivityType(activity.type);
-      setStartTime(activity.startTime);
+      // Show When in local time (e.g. "Feb 15 at 5:00 AM"), not raw UTC ISO
+      const start = new Date(activity.startTime);
+      const dateStr = start.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+      const timeStr = start.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      setStartTime(`${dateStr} at ${timeStr}`);
       // Calculate duration from start and end time
       if (activity.endTime) {
         const start = new Date(activity.startTime);
@@ -137,6 +147,7 @@ export default function CreateActivityBottomSheet({
     }
     if (activity && initialEditMode) {
       setIsEditMode(true);
+      setIsProMode(false); // Edit opens in Easy mode; user can switch to Pro mode
     }
   }, [activity, resetForm, initialEditMode]);
 
@@ -216,8 +227,11 @@ export default function CreateActivityBottomSheet({
         }
       }
 
-      // Parse time (3pm, 10am, 15:00, etc.)
-      const timeMatch = inputLower.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
+      // Parse time (3pm, 10am, 5:00 pm, etc.). Prefer part after " at " so "Feb 15 at 5:00 pm" uses 5:00 pm not 15.
+      const timePart = inputLower.includes(" at ")
+        ? inputLower.split(" at ").pop()?.trim() ?? inputLower
+        : inputLower;
+      const timeMatch = timePart.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
       if (timeMatch) {
         let hours = parseInt(timeMatch[1]);
         const minutes = parseInt(timeMatch[2] || "0");
@@ -430,13 +444,17 @@ export default function CreateActivityBottomSheet({
       !onUpdate ||
       !title.trim() ||
       !startTime.trim() ||
-      !location.trim() ||
-      !!dateError ||
-      !parsedDate
+      !location.trim()
     )
       return;
-    const startTimeISO =
-      parsedDate?.toISOString() ?? new Date(startTime.trim()).toISOString();
+    // Parse current When input at submit time so we use the edited value, not stale parsedDate
+    const parseResult = parseDateTime(startTime);
+    if (parseResult.error || !parseResult.date) {
+      setDateError(parseResult.error || "Please enter a valid date and time");
+      return;
+    }
+    setDateError("");
+    const startTimeISO = parseResult.date.toISOString();
     let endTimeISO: string;
     if (duration.trim()) {
       const startDate = new Date(startTimeISO);
@@ -489,12 +507,11 @@ export default function CreateActivityBottomSheet({
     title,
     startTime,
     location,
-    dateError,
-    parsedDate,
     duration,
     activityType,
     maxParticipants,
     requiresApproval,
+    parseDateTime,
   ]);
 
   const handleJoin = useCallback(() => {
@@ -565,7 +582,7 @@ export default function CreateActivityBottomSheet({
                 ? "Edit activity"
                 : activity?.name}
           </Text>
-          {isCreateMode && (
+          {(isCreateMode || isEditMode) && (
             <TouchableOpacity
               onPress={() => setIsProMode(!isProMode)}
               style={styles.modeToggle}
@@ -676,7 +693,7 @@ export default function CreateActivityBottomSheet({
               />
             </View>
 
-            {(isProMode || isEditMode) && (
+            {isProMode && (
               <>
                 <View style={styles.section}>
                   <Text style={[styles.label, { color: colors.text }]}>
@@ -791,14 +808,6 @@ export default function CreateActivityBottomSheet({
               </Text>
             </View>
 
-            {isEditMode && (
-              <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: "#888" }]}
-                onPress={() => setIsEditMode(false)}
-              >
-                <Text style={styles.actionButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            )}
             <TouchableOpacity
               style={[
                 styles.createButton,

@@ -69,6 +69,11 @@ class ApiService {
         );
       }
 
+      // 204 No Content has no body; do not call response.json()
+      if (response.status === 204) {
+        return undefined as T;
+      }
+
       const responseData = await response.json();
       console.log(
         "[API] Response data:",
@@ -170,6 +175,22 @@ class ApiService {
     await this.fetch<ApiResponse<void>>(`/activities/${activityId}/leave`, {
       method: "POST",
     });
+  }
+
+  /** Request to join an activity that requires approval. */
+  async requestToJoinActivity(activityId: string): Promise<void> {
+    await this.fetch<ApiResponse<void>>(
+      `/activities/${activityId}/request`,
+      { method: "POST" },
+    );
+  }
+
+  /** Cancel a pending request to join an activity. */
+  async cancelJoinRequest(activityId: string): Promise<void> {
+    await this.fetch<ApiResponse<void>>(
+      `/activities/${activityId}/request`,
+      { method: "DELETE" },
+    );
   }
 
   async updateActivity(

@@ -1,10 +1,13 @@
 import ActivityDetailBottomSheet from "@/components/ActivityDetailBottomSheet";
 import ActivityItem from "@/components/ActivityItem";
+import CreateActivityBottomSheet, {
+  CreateActivityForm,
+} from "@/components/CreateActivityBottomSheet";
 import { useColorScheme } from "@/components/useColorScheme";
 import Colors from "@/constants/Colors";
+import { useActivitySync } from "@/contexts/ActivitySyncContext";
 import { apiService } from "@/services/api.service";
 import { Activity, getActivityOrganizerName } from "@/types/Activity";
-import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -136,6 +139,10 @@ export default function TabOneScreen() {
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
     null,
   );
+  /** Activity open in edit mode (same CreateActivityBottomSheet as My Activity tab). undefined = edit sheet closed. */
+  const [activityToEdit, setActivityToEdit] = useState<Activity | undefined>(
+    undefined,
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadingMorePast, setLoadingMorePast] = useState(false);
@@ -146,10 +153,38 @@ export default function TabOneScreen() {
   /** Prevent onEndReached/scroll from firing load-more until initial load is done (avoids past prepended on first paint). */
   const initialLoadDone = useRef(false);
 
-  // Load activities on mount
+  const {
+    subscribeToActivityUpdates,
+    notifyActivityUpdated,
+    subscribeToActivityDeleted,
+    notifyActivityDeleted,
+  } = useActivitySync();
+
+  // Sync cached list when an activity is updated on the other tab (no API call)
   useEffect(() => {
-    loadActivities();
-  }, []);
+    return subscribeToActivityUpdates((activity) => {
+      setActivities((prev) =>
+        prev.some((a) => a.id === activity.id)
+          ? prev.map((a) => (a.id === activity.id ? activity : a))
+          : prev,
+      );
+      setSelectedActivity((prev) =>
+        prev?.id === activity.id ? activity : prev,
+      );
+      setActivityToEdit((prev) =>
+        prev?.id === activity.id ? activity : prev,
+      );
+    });
+  }, [subscribeToActivityUpdates]);
+
+  // Sync: remove activity from list when deleted on the other tab
+  useEffect(() => {
+    return subscribeToActivityDeleted((activityId) => {
+      setActivities((prev) => prev.filter((a) => a.id !== activityId));
+      setSelectedActivity((prev) => (prev?.id === activityId ? null : prev));
+      setActivityToEdit((prev) => (prev?.id === activityId ? undefined : prev));
+    });
+  }, [subscribeToActivityDeleted]);
 
   /**
    * Filter to activities that start at or after now (exclude past on initial/refresh).
@@ -199,6 +234,11 @@ export default function TabOneScreen() {
       initialLoadDone.current = true;
     }
   }, []);
+
+  // Initial load only (no refetch on tab focus)
+  useEffect(() => {
+    loadActivities();
+  }, [loadActivities]);
 
   /**
    * Refresh: reset to initial window (future from now).
@@ -430,13 +470,45 @@ export default function TabOneScreen() {
     }
   };
 
-  const router = useRouter();
+  const refreshSelectedActivity = async (activityId: string) => {
+    try {
+      const updated = await apiService.getActivity(activityId);
+      setSelectedActivity((prev) => (prev?.id === activityId ? updated : prev));
+      setActivities((prev) =>
+        prev.map((a) => (a.id === activityId ? updated : a)),
+      );
+    } catch {
+      // Ignore; list will still reflect previous state
+    }
+  };
+
+  const handleRequestToJoin = async (activityId: string) => {
+    try {
+      await apiService.requestToJoinActivity(activityId);
+      await refreshSelectedActivity(activityId);
+    } catch (error) {
+      console.error("Failed to request to join:", error);
+      Alert.alert("Error", "Failed to request to join. Please try again.");
+    }
+  };
+
+  const handleCancelRequest = async (activityId: string) => {
+    try {
+      await apiService.cancelJoinRequest(activityId);
+      await refreshSelectedActivity(activityId);
+    } catch (error) {
+      console.error("Failed to cancel request:", error);
+      Alert.alert("Error", "Failed to cancel request. Please try again.");
+    }
+  };
 
   const handleDelete = async (activityId: string) => {
     try {
       await apiService.deleteActivity(activityId);
       setActivities((prev) => prev.filter((a) => a.id !== activityId));
       setSelectedActivity(null);
+      if (activityToEdit?.id === activityId) setActivityToEdit(undefined);
+      notifyActivityDeleted(activityId);
     } catch (error) {
       console.error("Failed to delete activity:", error);
       Alert.alert("Error", "Failed to delete activity. Please try again.");
@@ -444,8 +516,37 @@ export default function TabOneScreen() {
   };
 
   const handleEdit = (activityId: string) => {
+    const activity =
+      selectedActivity?.id === activityId
+        ? selectedActivity
+        : activities.find((a) => a.id === activityId);
     setSelectedActivity(null);
-    router.push(`/two?editActivityId=${activityId}`);
+    if (activity) setActivityToEdit(activity);
+  };
+
+  const handleUpdate = async (
+    activityId: string,
+    form: CreateActivityForm,
+  ) => {
+    try {
+      const updated = await apiService.updateActivity(activityId, {
+        name: form.name,
+        type: form.type,
+        startTime: form.startTime,
+        endTime: form.endTime ?? null,
+        location: form.location ?? null,
+        maxParticipants: form.maxParticipants ?? null,
+      });
+      setActivities((prev) =>
+        prev.map((a) => (a.id === activityId ? updated : a)),
+      );
+      setSelectedActivity((prev) => (prev?.id === activityId ? updated : prev));
+      setActivityToEdit(undefined);
+      notifyActivityUpdated(updated);
+    } catch (error) {
+      console.error("Failed to update activity:", error);
+      Alert.alert("Error", "Failed to update activity. Please try again.");
+    }
   };
 
   const handleAddComment = async (activityId: string, commentText: string) => {
@@ -586,10 +687,25 @@ export default function TabOneScreen() {
         onClose={handleCloseBottomSheet}
         onJoin={handleJoin}
         onLeave={handleLeave}
+        onRequestToJoin={handleRequestToJoin}
+        onCancelRequest={handleCancelRequest}
         onAddComment={handleAddComment}
         onEdit={handleEdit}
         onDelete={handleDelete}
       />
+      {activityToEdit !== undefined && (
+        <CreateActivityBottomSheet
+          activity={activityToEdit}
+          initialEditMode
+          onClose={() => setActivityToEdit(undefined)}
+          onCreate={() => {}}
+          onJoin={handleJoin}
+          onLeave={handleLeave}
+          onAddComment={handleAddComment}
+          onDelete={handleDelete}
+          onUpdate={handleUpdate}
+        />
+      )}
     </View>
   );
 }
