@@ -55,6 +55,12 @@ export interface Activity {
   messages?: ActivityMessage[];
   /** Set by API for "my activities" responses: organizer | participant | requesting */
   myParticipationStatus?: "organizer" | "participant" | "requesting" | null;
+  /** Client-only: used for optimistic join/leave and fallback display */
+  participantCount?: number;
+  /** Client-only: is current user a participant */
+  isParticipant?: boolean;
+  /** Legacy: comments (prefer messages when API provides them) */
+  comments?: Comment[];
 }
 
 // Legacy Comment type - can be removed once messages are fully implemented

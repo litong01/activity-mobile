@@ -24,113 +24,6 @@ import {
 
 const ACTIVITY_PAGE_SIZE = 10;
 
-// Mock data - this will be replaced with API calls
-const INITIAL_ACTIVITIES: Activity[] = [
-  {
-    id: "1",
-    title: "Morning Yoga Session",
-    description:
-      "Join us for a relaxing morning yoga session at the park. All levels welcome!",
-    time: "Today, 8:00 AM",
-    location: "Central Park, North Meadow",
-    organizerName: "Sarah Johnson",
-    activityType: "outdoor",
-    isParticipant: false,
-    participantCount: 8,
-    maxParticipants: 15,
-    comments: [],
-  },
-  {
-    id: "2",
-    title: "Coffee & Code Meetup",
-    description:
-      "Casual coding meetup for developers. Bring your laptop and projects!",
-    time: "Today, 2:00 PM",
-    location: "Starbucks Downtown",
-    organizerName: "Mike Chen",
-    activityType: "learning",
-    isParticipant: true,
-    participantCount: 12,
-    maxParticipants: 20,
-    comments: [
-      {
-        id: "c1",
-        userId: "u1",
-        userName: "Alex Kim",
-        text: "Looking forward to this! Anyone working on React Native?",
-        timestamp: "2 hours ago",
-      },
-      {
-        id: "c2",
-        userId: "u2",
-        userName: "Mike Chen",
-        text: "I'll bring some project ideas to discuss!",
-        timestamp: "1 hour ago",
-      },
-    ],
-  },
-  {
-    id: "3",
-    title: "Basketball Pickup Game",
-    description: "Weekly basketball game. Come play and meet new friends!",
-    time: "Tomorrow, 6:00 PM",
-    location: "Riverside Courts",
-    organizerName: "James Williams",
-    activityType: "sports",
-    isParticipant: false,
-    participantCount: 10,
-    maxParticipants: 10,
-    comments: [],
-  },
-  {
-    id: "4",
-    title: "Live Jazz Night",
-    description: "Enjoy an evening of smooth jazz with local artists.",
-    time: "Friday, 8:00 PM",
-    location: "Blue Note Jazz Club",
-    organizerName: "Emily Davis",
-    activityType: "music",
-    isParticipant: false,
-    participantCount: 45,
-    comments: [],
-  },
-  {
-    id: "5",
-    title: "Food Truck Festival",
-    description:
-      "Explore cuisines from around the world with over 20 food trucks!",
-    time: "Saturday, 12:00 PM",
-    location: "Harbor Front",
-    organizerName: "City Events",
-    activityType: "food",
-    isParticipant: true,
-    participantCount: 234,
-    comments: [
-      {
-        id: "c3",
-        userId: "u3",
-        userName: "Sarah Lee",
-        text: "Can't wait! I heard the Thai food truck is amazing!",
-        timestamp: "3 hours ago",
-      },
-    ],
-  },
-  {
-    id: "6",
-    title: "Board Game Night",
-    description:
-      "Weekly board game gathering. We have tons of games or bring your own!",
-    time: "Saturday, 7:00 PM",
-    location: "The Game Lounge",
-    organizerName: "Alex Martinez",
-    activityType: "social",
-    isParticipant: false,
-    participantCount: 16,
-    maxParticipants: 25,
-    comments: [],
-  },
-];
-
 export default function TabOneScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
@@ -227,7 +120,6 @@ export default function TabOneScreen() {
         "Failed to load activities. Please check your backend server is running.",
         [{ text: "OK" }],
       );
-      setActivities(INITIAL_ACTIVITIES as unknown as Activity[]);
     } finally {
       setIsLoading(false);
       pastLoadTriggered.current = false;
