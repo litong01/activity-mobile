@@ -193,6 +193,26 @@ export default function CreateActivityBottomSheet({
         baseDate.setDate(baseDate.getDate() + 1);
       }
 
+      // Handle weekday names: "Monday 7:00pm" → next occurrence of that day (or today if still in future)
+      const weekdayMatch = inputLower.match(
+        /\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)s?\b/i,
+      );
+      if (weekdayMatch) {
+        const dayNames = [
+          "sunday",
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+        ];
+        const targetDay = dayNames.indexOf(weekdayMatch[1].toLowerCase());
+        const currentDay = baseDate.getDay();
+        let daysToAdd = (targetDay - currentDay + 7) % 7;
+        baseDate.setDate(baseDate.getDate() + daysToAdd);
+      }
+
       // Handle month/day patterns like "feb 10", "2/10"
       const dateMatch = inputLower.match(
         /(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d+)|(\d{1,2})\/(\d{1,2})/i,
@@ -244,7 +264,8 @@ export default function CreateActivityBottomSheet({
       } else if (
         inputLower !== "today" &&
         !inputLower.includes("tomorrow") &&
-        !dateMatch
+        !dateMatch &&
+        !weekdayMatch
       ) {
         return {
           date: null,
@@ -255,6 +276,11 @@ export default function CreateActivityBottomSheet({
       // Check if date is in the past
       const now = new Date();
       if (baseDate < now) {
+        // If user said a weekday (e.g. "Monday 7pm"), use next week's occurrence
+        if (weekdayMatch) {
+          baseDate.setDate(baseDate.getDate() + 7);
+          if (baseDate >= now) return { date: baseDate, error: "" };
+        }
         return { date: null, error: "Date and time cannot be in the past" };
       }
 
@@ -322,6 +348,25 @@ export default function CreateActivityBottomSheet({
       if (input.includes("tomorrow")) {
         baseDate.setDate(baseDate.getDate() + 1);
       }
+      // Handle weekday names (e.g. "Monday 7:00pm")
+      const weekdayMatch = input.match(
+        /\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)s?\b/i,
+      );
+      if (weekdayMatch) {
+        const dayNames = [
+          "sunday",
+          "monday",
+          "tuesday",
+          "wednesday",
+          "thursday",
+          "friday",
+          "saturday",
+        ];
+        const targetDay = dayNames.indexOf(weekdayMatch[1].toLowerCase());
+        const currentDay = baseDate.getDay();
+        let daysToAdd = (targetDay - currentDay + 7) % 7;
+        baseDate.setDate(baseDate.getDate() + daysToAdd);
+      }
       // Handle month/day patterns like "feb 10", "2/10"
       const dateMatch = input.match(
         /(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d+)|(\d{1,2})\/(\d{1,2})/i,
@@ -358,8 +403,11 @@ export default function CreateActivityBottomSheet({
         }
       }
 
-      // Parse time (3pm, 10am, 15:00, etc.)
-      const timeMatch = input.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
+      // Parse time (3pm, 10am, 15:00, etc.). Prefer part after " at " when present.
+      const timePart = input.includes(" at ")
+        ? input.split(" at ").pop()?.trim() ?? input
+        : input;
+      const timeMatch = timePart.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
       if (timeMatch) {
         let hours = parseInt(timeMatch[1]);
         const minutes = parseInt(timeMatch[2] || "0");
@@ -369,6 +417,12 @@ export default function CreateActivityBottomSheet({
         if (!isPM && hours === 12) hours = 0;
 
         baseDate.setHours(hours, minutes, 0, 0);
+      }
+
+      // If weekday was used and result is still in the past, use next week
+      const now = new Date();
+      if (weekdayMatch && baseDate < now) {
+        baseDate.setDate(baseDate.getDate() + 7);
       }
 
       startTimeISO = baseDate.toISOString();
