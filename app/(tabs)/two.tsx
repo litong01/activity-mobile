@@ -11,6 +11,7 @@ import {
   Activity,
   getActivityOrganizerName,
   getMyParticipationStatus,
+  isActivityFinished,
 } from "@/types/Activity";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, {
@@ -130,33 +131,36 @@ export default function TabTwoScreen() {
   }, [editActivityId, router]);
 
   /**
-   * Filter to activities that start at or after now (exclude past on initial/refresh).
-   * Uses a single "now" captured when processing the response; supports startTime or start_time.
+   * Filter to activities that have not finished (exclude past/ended on initial/refresh).
+   * Uses a single "now" when processing; supports startTime or start_time; also excludes ended (state or endTime).
    */
-  const filterFutureOnly = (data: Activity[]) => {
+  const filterNotFinished = (data: Activity[]) => {
     const nowMs = Date.now();
     return data.filter((a) => {
       const raw = a.startTime ?? (a as { start_time?: string }).start_time;
       if (!raw) return false;
       const ms = new Date(raw).getTime();
       if (Number.isNaN(ms)) return false;
-      return ms >= nowMs;
+      if (ms < nowMs) return false; // started in the past
+      return !isActivityFinished(a); // exclude ended (state completed/cancelled or endTime passed)
     });
   };
 
   /**
    * Load initial window: future activities from now (PAGE_SIZE), sorted ascending.
+   * startTimeFrom is "now" in UTC so only activities that start at or after now are requested.
    */
   const loadActivities = useCallback(async () => {
     try {
       setIsLoading(true);
       setHasMorePast(true);
       setHasMoreFuture(true);
+      const nowIso = new Date().toISOString();
       const data = await apiService.getMyActivities({
-        startTimeFrom: new Date().toISOString(),
+        startTimeFrom: nowIso,
         limit: ACTIVITY_PAGE_SIZE,
       });
-      const futureOnly = filterFutureOnly(data);
+      const futureOnly = filterNotFinished(data);
       const sorted = [...futureOnly].sort(
         (a, b) =>
           (a.startTime ? new Date(a.startTime).getTime() : 0) -
@@ -185,11 +189,12 @@ export default function TabTwoScreen() {
       setIsRefreshing(true);
       setHasMorePast(true);
       setHasMoreFuture(true);
+      const nowIso = new Date().toISOString();
       const data = await apiService.getMyActivities({
-        startTimeFrom: new Date().toISOString(),
+        startTimeFrom: nowIso,
         limit: ACTIVITY_PAGE_SIZE,
       });
-      const futureOnly = filterFutureOnly(data);
+      const futureOnly = filterNotFinished(data);
       const sorted = [...futureOnly].sort(
         (a, b) =>
           (a.startTime ? new Date(a.startTime).getTime() : 0) -

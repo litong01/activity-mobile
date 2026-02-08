@@ -96,14 +96,16 @@ export default function TabOneScreen() {
 
   /**
    * Load initial window: future activities from now (PAGE_SIZE), sorted ascending.
+   * startTimeFrom is "now" in UTC so the backend returns only activities that start at or after the current moment.
    */
   const loadActivities = useCallback(async () => {
     try {
       setIsLoading(true);
       setHasMorePast(true);
       setHasMoreFuture(true);
+      const nowIso = new Date().toISOString(); // current date and time in UTC (e.g. 2026-02-18T07:00:00.000Z)
       const data = await apiService.getActivities({
-        startTimeFrom: new Date().toISOString(),
+        startTimeFrom: nowIso,
         limit: ACTIVITY_PAGE_SIZE,
       });
       const futureOnly = filterFutureOnly(data);
@@ -140,8 +142,9 @@ export default function TabOneScreen() {
       setIsRefreshing(true);
       setHasMorePast(true);
       setHasMoreFuture(true);
+      const nowIso = new Date().toISOString(); // current date and time in UTC
       const data = await apiService.getActivities({
-        startTimeFrom: new Date().toISOString(),
+        startTimeFrom: nowIso,
         limit: ACTIVITY_PAGE_SIZE,
       });
       const futureOnly = filterFutureOnly(data);
