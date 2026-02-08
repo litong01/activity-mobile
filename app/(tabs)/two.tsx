@@ -63,6 +63,8 @@ export default function TabTwoScreen() {
   const [hasMoreFuture, setHasMoreFuture] = useState(true);
   const pastLoadTriggered = useRef(false);
   const initialLoadDone = useRef(false);
+  /** Cooldown after full load so sheet/alert dismiss layout shift doesn't trigger onEndReached → loadMorePast. */
+  const lastFullLoadAt = useRef(0);
 
   const {
     subscribeToActivityUpdates,
@@ -74,11 +76,15 @@ export default function TabTwoScreen() {
   // Sync cached list when an activity is updated on the other tab (no API call)
   useEffect(() => {
     return subscribeToActivityUpdates((activity) => {
-      setActivities((prev) =>
-        prev.some((a) => a.id === activity.id)
-          ? prev.map((a) => (a.id === activity.id ? activity : a))
-          : prev,
-      );
+      setActivities((prev) => {
+        if (isActivityFinished(activity)) {
+          return prev.filter((a) => a.id !== activity.id);
+        }
+        if (prev.some((a) => a.id === activity.id)) {
+          return prev.map((a) => (a.id === activity.id ? activity : a));
+        }
+        return prev;
+      });
       setDetailActivity((prev) =>
         prev?.id === activity.id ? activity : prev,
       );
@@ -131,36 +137,40 @@ export default function TabTwoScreen() {
   }, [editActivityId, router]);
 
   /**
-   * Filter to activities that have not finished (exclude past/ended on initial/refresh).
-   * Uses a single "now" when processing; supports startTime or start_time; also excludes ended (state or endTime).
+   * Filter to activities that have not finished (exclude past/ended).
+   * Uses the same nowMs for consistency when called after an API response.
    */
-  const filterNotFinished = (data: Activity[]) => {
-    const nowMs = Date.now();
-    return data.filter((a) => {
-      const raw = a.startTime ?? (a as { start_time?: string }).start_time;
-      if (!raw) return false;
-      const ms = new Date(raw).getTime();
-      if (Number.isNaN(ms)) return false;
-      if (ms < nowMs) return false; // started in the past
-      return !isActivityFinished(a); // exclude ended (state completed/cancelled or endTime passed)
-    });
-  };
+  const filterNotFinished = useCallback(
+    (data: Activity[], nowMs: number) => {
+      return data.filter((a) => {
+        const raw = a.startTime ?? (a as { start_time?: string }).start_time;
+        if (!raw) return false;
+        const ms = new Date(raw).getTime();
+        if (Number.isNaN(ms)) return false;
+        if (ms < nowMs) return false; // started in the past
+        return !isActivityFinished(a); // exclude ended (state or endTime passed)
+      });
+    },
+    [],
+  );
 
   /**
    * Load initial window: future activities from now (PAGE_SIZE), sorted ascending.
-   * startTimeFrom is "now" in UTC so only activities that start at or after now are requested.
+   * Uses a single "now" for both request and filter so we never show finished activities after refresh/create.
    */
   const loadActivities = useCallback(async () => {
     try {
       setIsLoading(true);
       setHasMorePast(true);
       setHasMoreFuture(true);
-      const nowIso = new Date().toISOString();
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const nowMs = now.getTime();
       const data = await apiService.getMyActivities({
         startTimeFrom: nowIso,
         limit: ACTIVITY_PAGE_SIZE,
       });
-      const futureOnly = filterNotFinished(data);
+      const futureOnly = filterNotFinished(data, nowMs);
       const sorted = [...futureOnly].sort(
         (a, b) =>
           (a.startTime ? new Date(a.startTime).getTime() : 0) -
@@ -178,23 +188,27 @@ export default function TabTwoScreen() {
       setIsLoading(false);
       pastLoadTriggered.current = false;
       initialLoadDone.current = true;
+      lastFullLoadAt.current = Date.now();
     }
-  }, []);
+  }, [filterNotFinished]);
 
   /**
    * Refresh: reset to initial window (future from now).
+   * Uses a single "now" for both request and filter.
    */
   const handleRefresh = useCallback(async () => {
     try {
       setIsRefreshing(true);
       setHasMorePast(true);
       setHasMoreFuture(true);
-      const nowIso = new Date().toISOString();
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const nowMs = now.getTime();
       const data = await apiService.getMyActivities({
         startTimeFrom: nowIso,
         limit: ACTIVITY_PAGE_SIZE,
       });
-      const futureOnly = filterNotFinished(data);
+      const futureOnly = filterNotFinished(data, nowMs);
       const sorted = [...futureOnly].sort(
         (a, b) =>
           (a.startTime ? new Date(a.startTime).getTime() : 0) -
@@ -205,8 +219,9 @@ export default function TabTwoScreen() {
       console.error("Failed to refresh my activities:", error);
     } finally {
       setIsRefreshing(false);
+      lastFullLoadAt.current = Date.now();
     }
-  }, []);
+  }, [filterNotFinished]);
 
   /**
    * Load more past activities (scroll up).
@@ -214,6 +229,7 @@ export default function TabTwoScreen() {
   const loadMorePast = useCallback(async () => {
     if (!initialLoadDone.current) return;
     if (loadingMorePast || !hasMorePast || activities.length === 0) return;
+    if (Date.now() - lastFullLoadAt.current < 2000) return;
     const firstStart = activities[0].startTime;
     if (!firstStart) return;
     setLoadingMorePast(true);
@@ -361,10 +377,9 @@ export default function TabTwoScreen() {
   const handleCreateActivity = useCallback(
     async (form: CreateActivityForm) => {
       try {
-        const newActivity = await apiService.createActivity(form);
+        await apiService.createActivity(form);
         setSelectedActivity(undefined); // Close the bottom sheet
         await loadActivities(); // Refresh the list
-        Alert.alert("Success", `Activity "${newActivity.name}" created!`);
       } catch (error) {
         console.error("Failed to create activity:", error);
         Alert.alert("Error", "Failed to create activity. Please try again.");
@@ -406,9 +421,12 @@ export default function TabTwoScreen() {
       try {
         const updated = await apiService.getActivity(activityId);
         setDetailActivity((prev) => (prev?.id === activityId ? updated : prev));
-        setActivities((prev) =>
-          prev.map((a) => (a.id === activityId ? updated : a)),
-        );
+        setActivities((prev) => {
+          const next = prev.map((a) => (a.id === activityId ? updated : a));
+          return isActivityFinished(updated)
+            ? next.filter((a) => a.id !== activityId)
+            : next;
+        });
       } catch {
         await loadActivities();
       }
@@ -494,9 +512,12 @@ export default function TabTwoScreen() {
         location: form.location ?? null,
         maxParticipants: form.maxParticipants ?? null,
       });
-      setActivities((prev) =>
-        prev.map((a) => (a.id === activityId ? updated : a)),
-      );
+      setActivities((prev) => {
+        const next = prev.map((a) => (a.id === activityId ? updated : a));
+        return isActivityFinished(updated)
+          ? next.filter((a) => a.id !== activityId)
+          : next;
+      });
       setSelectedActivity(updated);
       setOpeningInEditMode(false);
       notifyActivityUpdated(updated);

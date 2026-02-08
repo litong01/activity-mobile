@@ -134,7 +134,9 @@ export function getActivityUserRole(activity: Activity): ActivityUserRole {
 export function isActivityFinished(activity: Activity): boolean {
   if (activity.state === "completed" || activity.state === "cancelled")
     return true;
-  const endOrStart = activity.endTime ?? activity.startTime;
+  const raw = activity as Activity & { end_time?: string; start_time?: string };
+  const endOrStart =
+    activity.endTime ?? raw.end_time ?? activity.startTime ?? raw.start_time;
   if (!endOrStart) return false;
   return new Date(endOrStart).getTime() < Date.now();
 }

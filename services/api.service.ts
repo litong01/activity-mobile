@@ -16,6 +16,15 @@ interface ApiResponse<T> {
   message?: string;
 }
 
+/** Raw activity from API may use snake_case (start_time, end_time). */
+function normalizeActivity(raw: Record<string, unknown>): Activity {
+  const startTime =
+    (raw.startTime as string) ?? (raw.start_time as string) ?? "";
+  const endTime =
+    (raw.endTime as string | undefined) ?? (raw.end_time as string | undefined);
+  return { ...raw, startTime, endTime } as Activity;
+}
+
 class ApiService {
   private baseUrl: string;
 
@@ -119,20 +128,23 @@ class ApiService {
     const query = params.toString();
     const endpoint = `/activities${query ? `?${query}` : ""}`;
 
-    const response = await this.fetch<{ data?: Activity[]; meta?: unknown }>(
+    const response = await this.fetch<{ data?: unknown[]; meta?: unknown }>(
       endpoint,
     );
-    return response.data ?? [];
+    const list = response.data ?? [];
+    return list.map((item) =>
+      normalizeActivity(item as Record<string, unknown>),
+    );
   }
 
   async getActivity(id: string): Promise<Activity> {
-    const response = await this.fetch<ApiResponse<Activity>>(
+    const response = await this.fetch<ApiResponse<Record<string, unknown>>>(
       `/activities/${id}`,
     );
     if (!response.data) {
       throw new Error("Activity not found");
     }
-    return response.data;
+    return normalizeActivity(response.data);
   }
 
   /**
@@ -159,10 +171,13 @@ class ApiService {
       params.append("startTimeTo", filters.startTimeTo);
     const query = params.toString();
     const endpoint = `/users/${user.id}/activities${query ? `?${query}` : ""}`;
-    const response = await this.fetch<{ data?: Activity[]; meta?: unknown }>(
+    const response = await this.fetch<{ data?: unknown[]; meta?: unknown }>(
       endpoint,
     );
-    return response.data ?? [];
+    const list = response.data ?? [];
+    return list.map((item) =>
+      normalizeActivity(item as Record<string, unknown>),
+    );
   }
 
   async joinActivity(activityId: string): Promise<void> {
@@ -206,14 +221,14 @@ class ApiService {
       ruleId: string | null;
     }>,
   ): Promise<Activity> {
-    const response = await this.fetch<Activity>(
+    const response = await this.fetch<Record<string, unknown>>(
       `/activities/${activityId}`,
       {
         method: "PATCH",
         body: JSON.stringify(data),
       },
     );
-    return response;
+    return normalizeActivity(response);
   }
 
   async deleteActivity(activityId: string): Promise<void> {
@@ -233,11 +248,11 @@ class ApiService {
     organizerId: string;
     requiresApproval?: boolean;
   }): Promise<Activity> {
-    const response = await this.fetch<Activity>(`/activities`, {
+    const response = await this.fetch<Record<string, unknown>>(`/activities`, {
       method: "POST",
       body: JSON.stringify(data),
     });
-    return response;
+    return normalizeActivity(response);
   }
 
   /**
